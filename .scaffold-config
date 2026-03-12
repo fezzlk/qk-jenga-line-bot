@@ -1,0 +1,7 @@
+PROJECT_NAME="qk-jenga-line-bot"
+PROJECT_ID="qk-jenga-line-bot"
+SERVICE_NAME="qk-jenga-line-bot"
+REGION="asia-northeast1"
+OUTPUT_DIR="/Users/yusuketakizawa/repos/qk-jenga-line-bot"
+USE_FIREBASE_AUTH="y"
+USE_FIRESTORE="y"

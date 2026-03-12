@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    env_file:
+      - .env.local
+    restart: unless-stopped
+    # TODO: ホットリロード設定をスタックに合わせて追加
+    # Next.js: command: ["npm", "run", "dev"]
+    # FastAPI: command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+    # Flask: command: ["flask", "run", "--host", "0.0.0.0", "--port", "8080", "--reload"]
