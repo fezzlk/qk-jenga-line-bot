@@ -9,28 +9,6 @@
 - Linear is the only source of task status, priority, owner, due date, and next actions. Do not duplicate them here or in pico.
 - For AI features, add versioned evaluation cases, expected behavior, and failure handling before expanding scope.
 
-## Existing project guidance
+## Project-specific guidance
 
-# qk-jenga-line-bot
-
-## プロジェクト情報
-
-- **GCPプロジェクトID**: qk-jenga-line-bot
-- **Cloud Runサービス名**: qk-jenga-line-bot
-- **リージョン**: asia-northeast1
-
-## デプロイ
-
-`main` ブランチへの push で Cloud Build が自動デプロイを実行する。
-
-```bash
-git push origin main
-```
-
-## ログ確認
-
-Cloud Run のログは cloud-run-logging MCP を使って確認できる。
-
-## 出力ファイル
-
-調査報告・スクリプトなどは `~/ai-output/qk-jenga-line-bot/` に保存すること。
+Add repository-specific commands, architecture constraints, and verification steps here.
