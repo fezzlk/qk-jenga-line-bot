@@ -19,9 +19,29 @@
 - **Cloud Runサービス名**: qk-jenga-line-bot
 - **リージョン**: asia-northeast1
 
+## 技術スタック
+
+Node.js + TypeScript（Express, `@line/bot-sdk`, `firebase-admin`/Firestore）。詳細は`SPECIFICATION.md`を参照。
+
+## 開発
+
+```bash
+npm install
+cp .env.local.example .env.local   # LINE_CHANNEL_SECRET / LINE_CHANNEL_ACCESS_TOKEN を設定
+docker compose up                  # アプリ + Firestoreエミュレータをホットリロードで起動
+```
+
+```bash
+npm run dev         # ローカルで直接起動（tsx watch）
+npm run lint         # ESLint
+npm run typecheck    # tsc --noEmit
+npm test              # vitest
+npm run build          # tsc（本番ビルド）
+```
+
 ## デプロイ
 
-`main` ブランチへの push で Cloud Build が自動デプロイを実行する。
+`main` ブランチへの push で Cloud Build が自動デプロイを実行する。デプロイ前に、Secret Managerへ`line-channel-secret`・`line-channel-access-token`の2シークレットを作成しておく必要がある（`cloudbuild.yaml`参照）。
 
 ```bash
 git push origin main

@@ -12,7 +12,7 @@ LINEグループで遊ぶ、崩落リスク管理型のミニゲームBot。
 
 ## 現在の状態
 
-- 実装: 未着手（このリポジトリはプロジェクトスキャフォールドの段階です）
+- 実装: v1（文章パズルのみ、解答者1人まで）実装済み。画像パズル・複数解答者は未実装（詳細は `SPECIFICATION.md`）
 - 公開: 保留（[FEZ-33](https://linear.app/fezzlk/issue/FEZ-33/名称企画を再検討するjengaqk謎解きジェンガの言及を排除)の名称・企画確定、その後の公開可否判断を待っています）
 
 ## ドキュメント
@@ -22,8 +22,10 @@ LINEグループで遊ぶ、崩落リスク管理型のミニゲームBot。
 
 ## 開発
 
+技術スタック・開発コマンド（`npm install` / `docker compose up` / テスト実行など）は `CLAUDE.md` を参照してください。
+
 ```bash
 git push origin main
 ```
 
-で Cloud Build が自動デプロイを実行します（詳細は `CLAUDE.md` を参照）。
+で Cloud Build が自動デプロイを実行します（デプロイ前にSecret Managerへの認証情報登録が必要。詳細は `CLAUDE.md` を参照）。

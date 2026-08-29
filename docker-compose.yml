@@ -8,8 +8,19 @@ services:
       - /app/node_modules
     env_file:
       - .env.local
+    environment:
+      - FIRESTORE_EMULATOR_HOST=firestore-emulator:8085
+      - GOOGLE_CLOUD_PROJECT=qk-jenga-line-bot-local
+    command: ["npm", "run", "dev"]
     restart: unless-stopped
-    # TODO: ホットリロード設定をスタックに合わせて追加
-    # Next.js: command: ["npm", "run", "dev"]
-    # FastAPI: command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
-    # Flask: command: ["flask", "run", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+    depends_on:
+      - firestore-emulator
+
+  firestore-emulator:
+    # Official Google image with the JRE the Firestore emulator needs
+    # (a plain node:alpine image cannot run it, since it's a Java process).
+    image: google/cloud-sdk:emulators
+    ports:
+      - "8085:8085"
+    command: >
+      gcloud emulators firestore start --host-port=0.0.0.0:8085 --project=qk-jenga-line-bot-local
