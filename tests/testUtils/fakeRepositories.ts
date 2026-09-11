@@ -1,6 +1,7 @@
 import type { PuzzleRoundRepository } from "../../src/repositories/PuzzleRoundRepository.js";
 import type { AnswerSessionRepository } from "../../src/repositories/AnswerSessionRepository.js";
 import type { PlayerStatsRepository } from "../../src/repositories/PlayerStatsRepository.js";
+import type { Transactor } from "../../src/repositories/Transactor.js";
 import type { AnswerSession, PlayerStats, PuzzleRound } from "../../src/types.js";
 
 export function createFakePuzzleRoundRepository(initial: PuzzleRound[] = []): PuzzleRoundRepository {
@@ -25,6 +26,16 @@ export function createFakePuzzleRoundRepository(initial: PuzzleRound[] = []): Pu
       return [...rounds.values()].find((r) => r.groupId === groupId && r.phase !== "closed") ?? null;
     },
     async update(id, patch) {
+      const existing = rounds.get(id);
+      if (!existing) throw new Error(`not found: ${id}`);
+      rounds.set(id, { ...existing, ...patch });
+    },
+    // Fakes have no real Firestore transaction, so these just perform the same
+    // synchronous map read/write as their non-transactional counterparts above.
+    async getByIdInTransaction(_txn, id) {
+      return rounds.get(id) ?? null;
+    },
+    updateInTransaction(_txn, id, patch) {
       const existing = rounds.get(id);
       if (!existing) throw new Error(`not found: ${id}`);
       rounds.set(id, { ...existing, ...patch });
@@ -59,6 +70,11 @@ export function createFakeAnswerSessionRepository(
       if (!existing) throw new Error(`not found: ${id}`);
       sessions.set(id, { ...existing, ...patch });
     },
+    updateInTransaction(_txn, id, patch) {
+      const existing = sessions.get(id);
+      if (!existing) throw new Error(`not found: ${id}`);
+      sessions.set(id, { ...existing, ...patch });
+    },
   };
 }
 
@@ -68,21 +84,37 @@ export function createFakePlayerStatsRepository(): PlayerStatsRepository & {
   const stats = new Map<string, PlayerStats>();
   const calls: Array<{ groupId: string; userId: string; scoreDelta: number }> = [];
 
+  function apply(groupId: string, userId: string, scoreDelta: number) {
+    calls.push({ groupId, userId, scoreDelta });
+    const key = `${groupId}_${userId}`;
+    const existing = stats.get(key);
+    stats.set(key, {
+      groupId,
+      userId,
+      totalPlays: (existing?.totalPlays ?? 0) + 1,
+      totalScore: (existing?.totalScore ?? 0) + scoreDelta,
+    });
+  }
+
   return {
     calls,
     async get(groupId, userId) {
       return stats.get(`${groupId}_${userId}`) ?? null;
     },
     async recordResult(groupId, userId, scoreDelta) {
-      calls.push({ groupId, userId, scoreDelta });
-      const key = `${groupId}_${userId}`;
-      const existing = stats.get(key);
-      stats.set(key, {
-        groupId,
-        userId,
-        totalPlays: (existing?.totalPlays ?? 0) + 1,
-        totalScore: (existing?.totalScore ?? 0) + scoreDelta,
-      });
+      apply(groupId, userId, scoreDelta);
+    },
+    recordResultInTransaction(_txn, groupId, userId, scoreDelta) {
+      apply(groupId, userId, scoreDelta);
+    },
+  };
+}
+
+/** Runs the callback inline (no real Firestore transaction) for use with the fake repositories above. */
+export function createFakeTransactor(): Transactor {
+  return {
+    async run(fn) {
+      return fn({} as FirebaseFirestore.Transaction);
     },
   };
 }

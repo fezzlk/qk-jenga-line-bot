@@ -5,6 +5,7 @@ import {
   createFakeAnswerSessionRepository,
   createFakePlayerStatsRepository,
   createFakePuzzleRoundRepository,
+  createFakeTransactor,
 } from "../../testUtils/fakeRepositories.js";
 import type { AnswerSession, PuzzleRound } from "../../../src/types.js";
 
@@ -43,7 +44,7 @@ function build(session: AnswerSession, roundOverride: PuzzleRound = round) {
   const puzzleRounds = createFakePuzzleRoundRepository([roundOverride]);
   const answerSessions = createFakeAnswerSessionRepository([session]);
   const playerStats = createFakePlayerStatsRepository();
-  const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats);
+  const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
   const useCase = new AnswerUseCase(puzzleRounds, answerSessions, answerFlow);
   return { useCase, puzzleRounds, answerSessions, playerStats };
 }
@@ -90,6 +91,7 @@ describe("AnswerUseCase", () => {
     const session = await answerSessions.getById("session-1");
     expect(session?.revealedCount).toBe(2);
     expect(session?.currentStepAttempts).toBe(0);
+    expect(session?.wrongAnswerCount).toBe(1);
   });
 
   it("ends as fully_revealed when the per-block limit is hit on the last block", async () => {
@@ -102,6 +104,7 @@ describe("AnswerUseCase", () => {
     expect(reply).toContain("全開示となりました");
     const session = await answerSessions.getById("session-1");
     expect(session?.status).toBe("fully_revealed");
+    expect(session?.wrongAnswerCount).toBe(1);
     expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: -1 }]);
   });
 

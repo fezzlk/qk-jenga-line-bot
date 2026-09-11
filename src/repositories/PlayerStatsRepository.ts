@@ -34,4 +34,24 @@ export class PlayerStatsRepository {
       { merge: true },
     );
   }
+
+  /** Same as recordResult(), but queued on an in-flight Firestore transaction instead of writing immediately. */
+  recordResultInTransaction(
+    txn: FirebaseFirestore.Transaction,
+    groupId: string,
+    userId: string,
+    scoreDelta: number,
+  ): void {
+    const ref = getDb().collection(COLLECTION).doc(docId(groupId, userId));
+    txn.set(
+      ref,
+      {
+        groupId,
+        userId,
+        totalPlays: FieldValue.increment(1),
+        totalScore: FieldValue.increment(scoreDelta),
+      },
+      { merge: true },
+    );
+  }
 }

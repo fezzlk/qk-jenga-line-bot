@@ -5,6 +5,7 @@ import {
   createFakeAnswerSessionRepository,
   createFakePlayerStatsRepository,
   createFakePuzzleRoundRepository,
+  createFakeTransactor,
 } from "../../testUtils/fakeRepositories.js";
 import type { AnswerSession, PuzzleRound } from "../../../src/types.js";
 
@@ -25,7 +26,7 @@ function build(session: AnswerSession) {
   const puzzleRounds = createFakePuzzleRoundRepository([round]);
   const answerSessions = createFakeAnswerSessionRepository([session]);
   const playerStats = createFakePlayerStatsRepository();
-  const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats);
+  const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
   const useCase = new SkipUseCase(puzzleRounds, answerSessions, answerFlow);
   return { useCase, answerSessions, playerStats };
 }

@@ -47,4 +47,13 @@ export class AnswerSessionRepository {
   async update(id: string, patch: Partial<Omit<AnswerSession, "id">>): Promise<void> {
     await getDb().collection(COLLECTION).doc(id).update(patch);
   }
+
+  /** Same as update(), but queued on an in-flight Firestore transaction instead of writing immediately. */
+  updateInTransaction(
+    txn: FirebaseFirestore.Transaction,
+    id: string,
+    patch: Partial<Omit<AnswerSession, "id">>,
+  ): void {
+    txn.update(getDb().collection(COLLECTION).doc(id), patch);
+  }
 }

@@ -1,6 +1,7 @@
 import { PuzzleRoundRepository } from "./repositories/PuzzleRoundRepository.js";
 import { AnswerSessionRepository } from "./repositories/AnswerSessionRepository.js";
 import { PlayerStatsRepository } from "./repositories/PlayerStatsRepository.js";
+import { FirestoreTransactor } from "./repositories/Transactor.js";
 import { AnswerFlowService } from "./services/AnswerFlowService.js";
 import { LineMessagingService } from "./services/LineMessagingService.js";
 import { StartCreationUseCase } from "./useCases/commands/StartCreationUseCase.js";
@@ -17,13 +18,14 @@ export function buildHandleLineEventUseCase(): HandleLineEventUseCase {
   const puzzleRounds = new PuzzleRoundRepository();
   const answerSessions = new AnswerSessionRepository();
   const playerStats = new PlayerStatsRepository();
-  const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats);
+  const transactor = new FirestoreTransactor();
+  const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, transactor);
   const lineMessaging = new LineMessagingService();
 
   return new HandleLineEventUseCase(
     {
       問題作成開始: new StartCreationUseCase(puzzleRounds),
-      隠す: new HideUseCase(puzzleRounds),
+      隠す: new HideUseCase(puzzleRounds, transactor),
       作成状況: new CreationStatusUseCase(puzzleRounds),
       挑戦開始: new StartChallengeUseCase(puzzleRounds, answerSessions, answerFlow),
       回答: new AnswerUseCase(puzzleRounds, answerSessions, answerFlow),

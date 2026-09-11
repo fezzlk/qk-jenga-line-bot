@@ -54,4 +54,23 @@ export class PuzzleRoundRepository {
   async update(id: string, patch: Partial<Omit<PuzzleRound, "id">>): Promise<void> {
     await getDb().collection(COLLECTION).doc(id).update(patch);
   }
+
+  /** Re-reads the round inside an in-flight Firestore transaction, for read-modify-write safety. */
+  async getByIdInTransaction(
+    txn: FirebaseFirestore.Transaction,
+    id: string,
+  ): Promise<PuzzleRound | null> {
+    const doc = await txn.get(getDb().collection(COLLECTION).doc(id));
+    if (!doc.exists) return null;
+    return toEntity(doc.id, doc.data()!);
+  }
+
+  /** Same as update(), but queued on an in-flight Firestore transaction instead of writing immediately. */
+  updateInTransaction(
+    txn: FirebaseFirestore.Transaction,
+    id: string,
+    patch: Partial<Omit<PuzzleRound, "id">>,
+  ): void {
+    txn.update(getDb().collection(COLLECTION).doc(id), patch);
+  }
 }

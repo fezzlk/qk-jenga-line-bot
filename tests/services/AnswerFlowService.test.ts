@@ -4,6 +4,7 @@ import {
   createFakeAnswerSessionRepository,
   createFakePlayerStatsRepository,
   createFakePuzzleRoundRepository,
+  createFakeTransactor,
 } from "../testUtils/fakeRepositories.js";
 import type { AnswerSession, PuzzleRound } from "../../src/types.js";
 
@@ -40,7 +41,7 @@ describe("AnswerFlowService", () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const answerSessions = createFakeAnswerSessionRepository([session]);
     const playerStats = createFakePlayerStatsRepository();
-    const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats);
+    const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
 
     const result = await service.revealNextBlock(session, round);
 
@@ -53,7 +54,7 @@ describe("AnswerFlowService", () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const answerSessions = createFakeAnswerSessionRepository([session]);
     const playerStats = createFakePlayerStatsRepository();
-    const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats);
+    const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
 
     const result = await service.revealNextBlock({ ...session, revealedCount: 1 }, round);
 

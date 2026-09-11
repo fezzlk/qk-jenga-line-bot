@@ -43,11 +43,7 @@ export class AnswerUseCase implements CommandUseCase {
 
     const currentStepAttempts = session.currentStepAttempts + 1;
     if (currentStepAttempts >= session.attemptsPerBlockLimit) {
-      await this.answerSessions.update(session.id, { wrongAnswerCount });
-      const revealed = await this.answerFlow.revealNextBlock(
-        { ...session, wrongAnswerCount },
-        round,
-      );
+      const revealed = await this.answerFlow.revealNextBlock(session, round, { wrongAnswerCount });
       const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.revealedCount);
       if (revealed.status !== "active") {
         return `不正解です。この位置での回答上限に達し、全開示となりました。\n最終状態: ${preview}\n結果: アウト（-1点、記録済み）`;

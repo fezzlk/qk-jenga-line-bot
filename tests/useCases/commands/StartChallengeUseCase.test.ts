@@ -5,6 +5,7 @@ import {
   createFakeAnswerSessionRepository,
   createFakePlayerStatsRepository,
   createFakePuzzleRoundRepository,
+  createFakeTransactor,
 } from "../../testUtils/fakeRepositories.js";
 import type { PuzzleRound } from "../../../src/types.js";
 
@@ -29,7 +30,7 @@ describe("StartChallengeUseCase", () => {
     const puzzleRounds = createFakePuzzleRoundRepository([makeRound()]);
     const answerSessions = createFakeAnswerSessionRepository();
     const playerStats = createFakePlayerStatsRepository();
-    const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats);
+    const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
     const useCase = new StartChallengeUseCase(puzzleRounds, answerSessions, answerFlow);
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u3", args: "" });
@@ -46,7 +47,7 @@ describe("StartChallengeUseCase", () => {
     const puzzleRounds = createFakePuzzleRoundRepository();
     const answerSessions = createFakeAnswerSessionRepository();
     const playerStats = createFakePlayerStatsRepository();
-    const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats);
+    const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
     const useCase = new StartChallengeUseCase(puzzleRounds, answerSessions, answerFlow);
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u3", args: "" });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { HideUseCase } from "../../../src/useCases/commands/HideUseCase.js";
-import { createFakePuzzleRoundRepository } from "../../testUtils/fakeRepositories.js";
+import {
+  createFakePuzzleRoundRepository,
+  createFakeTransactor,
+} from "../../testUtils/fakeRepositories.js";
 import type { PuzzleRound } from "../../../src/types.js";
 
 function makeRound(overrides: Partial<PuzzleRound> = {}): PuzzleRound {
@@ -22,7 +25,7 @@ function makeRound(overrides: Partial<PuzzleRound> = {}): PuzzleRound {
 describe("HideUseCase", () => {
   it("hides a valid position and reports remaining count", async () => {
     const repo = createFakePuzzleRoundRepository([makeRound()]);
-    const useCase = new HideUseCase(repo);
+    const useCase = new HideUseCase(repo, createFakeTransactor());
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "1" });
 
@@ -34,7 +37,7 @@ describe("HideUseCase", () => {
 
   it("rejects the same user hiding twice in a row", async () => {
     const repo = createFakePuzzleRoundRepository([makeRound({ lastHiderId: "u1" })]);
-    const useCase = new HideUseCase(repo);
+    const useCase = new HideUseCase(repo, createFakeTransactor());
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "2" });
 
@@ -45,7 +48,7 @@ describe("HideUseCase", () => {
     const repo = createFakePuzzleRoundRepository([
       makeRound({ lastHiderId: "u1", hiddenPositions: [0] }),
     ]);
-    const useCase = new HideUseCase(repo);
+    const useCase = new HideUseCase(repo, createFakeTransactor());
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u2", args: "2" });
 
@@ -54,7 +57,7 @@ describe("HideUseCase", () => {
 
   it("rejects an out-of-range position", async () => {
     const repo = createFakePuzzleRoundRepository([makeRound()]);
-    const useCase = new HideUseCase(repo);
+    const useCase = new HideUseCase(repo, createFakeTransactor());
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "9" });
 
@@ -65,7 +68,7 @@ describe("HideUseCase", () => {
     const repo = createFakePuzzleRoundRepository([
       makeRound({ hiddenPositions: [0], lastHiderId: "u1" }),
     ]);
-    const useCase = new HideUseCase(repo);
+    const useCase = new HideUseCase(repo, createFakeTransactor());
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u2", args: "1" });
 
@@ -76,7 +79,7 @@ describe("HideUseCase", () => {
     const repo = createFakePuzzleRoundRepository([
       makeRound({ hiddenPositions: [0, 1], lastHiderId: "u1" }),
     ]);
-    const useCase = new HideUseCase(repo);
+    const useCase = new HideUseCase(repo, createFakeTransactor());
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u2", args: "3" });
 
