@@ -50,7 +50,7 @@ describe("AnswerFlowService", () => {
     expect(playerStats.calls).toHaveLength(0);
   });
 
-  it("ends the session as fully_revealed on the last block and records -1", async () => {
+  it("ends the session as fully_revealed on the last block and records 0", async () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const answerSessions = createFakeAnswerSessionRepository([session]);
     const playerStats = createFakePlayerStatsRepository();
@@ -59,18 +59,32 @@ describe("AnswerFlowService", () => {
     const result = await service.revealNextBlock({ ...session, revealedCount: 1 }, round);
 
     expect(result.status).toBe("fully_revealed");
-    expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: -1 }]);
+    expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: 0 }]);
     const closedRound = await puzzleRounds.getById("round-1");
     expect(closedRound?.phase).toBe("closed");
   });
 
-  it("records -1 for every id in extraPatch.answererIds when a new participant just joined", async () => {
+  it("records +1 for every id in extraPatch.answererIds when ending as correct", async () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const answerSessions = createFakeAnswerSessionRepository([session]);
     const playerStats = createFakePlayerStatsRepository();
     const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
 
     await service.endSession(session, round, "correct", { answererIds: ["u1", "u2"] });
+
+    expect(playerStats.calls).toEqual([
+      { groupId: "g1", userId: "u1", scoreDelta: 1 },
+      { groupId: "g1", userId: "u2", scoreDelta: 1 },
+    ]);
+  });
+
+  it("records -1 for every id in extraPatch.answererIds when ending as wrong_limit", async () => {
+    const puzzleRounds = createFakePuzzleRoundRepository([round]);
+    const answerSessions = createFakeAnswerSessionRepository([session]);
+    const playerStats = createFakePlayerStatsRepository();
+    const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+
+    await service.endSession(session, round, "wrong_limit", { answererIds: ["u1", "u2"] });
 
     expect(playerStats.calls).toEqual([
       { groupId: "g1", userId: "u1", scoreDelta: -1 },

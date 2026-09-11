@@ -1,6 +1,5 @@
 export const DEFAULT_WRONG_ANSWER_LIMIT = 3;
 export const DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT = 1;
-export const OUT_SCORE_PENALTY = -1;
 
 // Single categorical field (not separate booleans) so every Firestore lookup
 // used by the use cases stays equality-only on (groupId, phase) and never
@@ -31,6 +30,13 @@ export type PuzzleRound = {
 };
 
 export type AnswerSessionStatus = "active" | "correct" | "wrong_limit" | "fully_revealed";
+
+// 2026-09-07確定の配点方針: 正解=+1点、誤答上限到達=-1点、全開示未決着=0点。
+export const SCORE_BY_END_STATUS: Record<Exclude<AnswerSessionStatus, "active">, number> = {
+  correct: 1,
+  wrong_limit: -1,
+  fully_revealed: 0,
+};
 
 export type AnswerSession = {
   id: string;
