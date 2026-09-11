@@ -39,7 +39,7 @@ describe("StartChallengeUseCase", () => {
     const round = await puzzleRounds.getById("round-1");
     expect(round?.phase).toBe("in_challenge");
     const session = await answerSessions.getActiveByGroup("g1");
-    expect(session?.answererId).toBe("u3");
+    expect(session?.answererIds).toEqual(["u3"]);
     expect(session?.revealedCount).toBe(1);
   });
 

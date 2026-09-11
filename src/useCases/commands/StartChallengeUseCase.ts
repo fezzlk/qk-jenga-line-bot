@@ -21,7 +21,7 @@ export class StartChallengeUseCase implements CommandUseCase {
     const session = await this.answerSessions.create({
       puzzleRoundId: round.id,
       groupId,
-      answererId: userId,
+      answererIds: [userId],
       revealedCount: 0,
       wrongAnswerCount: 0,
       currentStepAttempts: 0,

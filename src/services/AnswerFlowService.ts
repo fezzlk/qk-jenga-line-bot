@@ -54,15 +54,15 @@ export class AnswerFlowService {
     extraPatch: Partial<AnswerSession> = {},
   ): Promise<AnswerSession> {
     const patch: Partial<AnswerSession> = { ...extraPatch, status, endedAt: Date.now() };
+    // patch.answererIds reflects a participant who just joined via this same action
+    // (see AnswerUseCase/SkipUseCase); fall back to the session's existing list otherwise.
+    const answererIds = patch.answererIds ?? session.answererIds;
     await this.transactor.run(async (txn) => {
       this.answerSessions.updateInTransaction(txn, session.id, patch);
       this.puzzleRounds.updateInTransaction(txn, round.id, { phase: "closed" });
-      this.playerStats.recordResultInTransaction(
-        txn,
-        session.groupId,
-        session.answererId,
-        OUT_SCORE_PENALTY,
-      );
+      for (const answererId of answererIds) {
+        this.playerStats.recordResultInTransaction(txn, session.groupId, answererId, OUT_SCORE_PENALTY);
+      }
     });
     return { ...session, ...patch };
   }

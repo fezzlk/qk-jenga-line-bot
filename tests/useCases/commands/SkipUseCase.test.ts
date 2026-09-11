@@ -37,7 +37,7 @@ describe("SkipUseCase", () => {
       id: "session-1",
       puzzleRoundId: "round-1",
       groupId: "g1",
-      answererId: "u1",
+      answererIds: ["u1"],
       revealedCount: 0,
       wrongAnswerCount: 0,
       currentStepAttempts: 0,
@@ -56,12 +56,34 @@ describe("SkipUseCase", () => {
     expect(playerStats.calls).toHaveLength(0);
   });
 
-  it("ends the session as fully_revealed when the last block is skipped", async () => {
+  it("joins a new participant (先着順) when they skip without having answered before", async () => {
     const session: AnswerSession = {
       id: "session-1",
       puzzleRoundId: "round-1",
       groupId: "g1",
-      answererId: "u1",
+      answererIds: ["u1"],
+      revealedCount: 0,
+      wrongAnswerCount: 0,
+      currentStepAttempts: 0,
+      wrongAnswerLimit: 3,
+      attemptsPerBlockLimit: 1,
+      status: "active",
+      startedAt: 0,
+      endedAt: null,
+    };
+    const { useCase, answerSessions } = build(session);
+
+    await useCase.execute({ groupId: "g1", userId: "someone-else", args: "" });
+
+    expect((await answerSessions.getById("session-1"))?.answererIds).toEqual(["u1", "someone-else"]);
+  });
+
+  it("ends the session as fully_revealed when the last block is skipped, recording -1 for every participant", async () => {
+    const session: AnswerSession = {
+      id: "session-1",
+      puzzleRoundId: "round-1",
+      groupId: "g1",
+      answererIds: ["u1", "u2"],
       revealedCount: 1,
       wrongAnswerCount: 0,
       currentStepAttempts: 0,
@@ -73,9 +95,12 @@ describe("SkipUseCase", () => {
     };
     const { useCase, playerStats } = build(session);
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u2", args: "" });
 
     expect(reply).toContain("全開示となりました");
-    expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: -1 }]);
+    expect(playerStats.calls).toEqual([
+      { groupId: "g1", userId: "u1", scoreDelta: -1 },
+      { groupId: "g1", userId: "u2", scoreDelta: -1 },
+    ]);
   });
 });

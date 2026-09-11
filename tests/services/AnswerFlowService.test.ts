@@ -25,7 +25,7 @@ const session: AnswerSession = {
   id: "session-1",
   puzzleRoundId: "round-1",
   groupId: "g1",
-  answererId: "u1",
+  answererIds: ["u1"],
   revealedCount: 0,
   wrongAnswerCount: 0,
   currentStepAttempts: 0,
@@ -62,5 +62,19 @@ describe("AnswerFlowService", () => {
     expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: -1 }]);
     const closedRound = await puzzleRounds.getById("round-1");
     expect(closedRound?.phase).toBe("closed");
+  });
+
+  it("records -1 for every id in extraPatch.answererIds when a new participant just joined", async () => {
+    const puzzleRounds = createFakePuzzleRoundRepository([round]);
+    const answerSessions = createFakeAnswerSessionRepository([session]);
+    const playerStats = createFakePlayerStatsRepository();
+    const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+
+    await service.endSession(session, round, "correct", { answererIds: ["u1", "u2"] });
+
+    expect(playerStats.calls).toEqual([
+      { groupId: "g1", userId: "u1", scoreDelta: -1 },
+      { groupId: "g1", userId: "u2", scoreDelta: -1 },
+    ]);
   });
 });

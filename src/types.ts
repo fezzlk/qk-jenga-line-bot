@@ -36,7 +36,10 @@ export type AnswerSession = {
   id: string;
   puzzleRoundId: string;
   groupId: string;
-  answererId: string;
+  // Grows dynamically as users send 回答/スキップ (first-come, no pre-registration).
+  // wrongAnswerCount/currentStepAttempts below are already session-scoped, so they
+  // are shared across every participant here without further change.
+  answererIds: string[];
   revealedCount: number;
   wrongAnswerCount: number;
   currentStepAttempts: number;
