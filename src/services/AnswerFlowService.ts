@@ -4,7 +4,7 @@ import { PlayerStatsRepository } from "../repositories/PlayerStatsRepository.js"
 import type { Transactor } from "../repositories/Transactor.js";
 import { isFullyRevealed } from "../domain/services/textPuzzle.js";
 import {
-  OUT_SCORE_PENALTY,
+  SCORE_BY_END_STATUS,
   type AnswerSession,
   type AnswerSessionStatus,
   type PuzzleRound,
@@ -13,8 +13,8 @@ import {
 /**
  * Shared write-path for the answer phase: revealing the next block and ending a
  * session. Centralized here because every termination (correct / wrong_limit /
- * fully_revealed) needs the same three writes (session, round, player stats) per
- * SPECIFICATION.md's "終了条件はすべて「解答者アウト」として同列、暫定-1点" rule.
+ * fully_revealed) needs the same three writes (session, round, player stats),
+ * with the score recorded depending on SCORE_BY_END_STATUS per SPECIFICATION.md.
  */
 export class AnswerFlowService {
   constructor(
@@ -57,11 +57,12 @@ export class AnswerFlowService {
     // patch.answererIds reflects a participant who just joined via this same action
     // (see AnswerUseCase/SkipUseCase); fall back to the session's existing list otherwise.
     const answererIds = patch.answererIds ?? session.answererIds;
+    const scoreDelta = SCORE_BY_END_STATUS[status];
     await this.transactor.run(async (txn) => {
       this.answerSessions.updateInTransaction(txn, session.id, patch);
       this.puzzleRounds.updateInTransaction(txn, round.id, { phase: "closed" });
       for (const answererId of answererIds) {
-        this.playerStats.recordResultInTransaction(txn, session.groupId, answererId, OUT_SCORE_PENALTY);
+        this.playerStats.recordResultInTransaction(txn, session.groupId, answererId, scoreDelta);
       }
     });
     return { ...session, ...patch };
