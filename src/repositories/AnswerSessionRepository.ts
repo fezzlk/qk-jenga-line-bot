@@ -48,6 +48,16 @@ export class AnswerSessionRepository {
     await getDb().collection(COLLECTION).doc(id).update(patch);
   }
 
+  /** Re-reads the session inside an in-flight Firestore transaction, for read-modify-write safety. */
+  async getByIdInTransaction(
+    txn: FirebaseFirestore.Transaction,
+    id: string,
+  ): Promise<AnswerSession | null> {
+    const doc = await txn.get(getDb().collection(COLLECTION).doc(id));
+    if (!doc.exists) return null;
+    return toEntity(doc.id, doc.data()!);
+  }
+
   /** Same as update(), but queued on an in-flight Firestore transaction instead of writing immediately. */
   updateInTransaction(
     txn: FirebaseFirestore.Transaction,

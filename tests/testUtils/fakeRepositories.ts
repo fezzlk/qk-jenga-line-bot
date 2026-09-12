@@ -70,6 +70,11 @@ export function createFakeAnswerSessionRepository(
       if (!existing) throw new Error(`not found: ${id}`);
       sessions.set(id, { ...existing, ...patch });
     },
+    // Fakes have no real Firestore transaction, so this just performs the same
+    // synchronous map read as its non-transactional counterpart above.
+    async getByIdInTransaction(_txn, id) {
+      return sessions.get(id) ?? null;
+    },
     updateInTransaction(_txn, id, patch) {
       const existing = sessions.get(id);
       if (!existing) throw new Error(`not found: ${id}`);

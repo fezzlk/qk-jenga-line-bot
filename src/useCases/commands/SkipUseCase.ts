@@ -12,23 +12,25 @@ export class SkipUseCase implements CommandUseCase {
   ) {}
 
   async execute({ groupId, userId }: CommandInput): Promise<string> {
-    const session = await this.answerSessions.getActiveByGroup(groupId);
-    if (!session) {
+    const activeSession = await this.answerSessions.getActiveByGroup(groupId);
+    if (!activeSession) {
       return "進行中の挑戦がありません。「挑戦開始」で始めてください。";
     }
-    const round = await this.puzzleRounds.getById(session.puzzleRoundId);
+    const round = await this.puzzleRounds.getById(activeSession.puzzleRoundId);
     if (!round) {
-      throw new Error(`PuzzleRound not found for active session: ${session.puzzleRoundId}`);
+      throw new Error(`PuzzleRound not found for active session: ${activeSession.puzzleRoundId}`);
     }
 
-    // 先着順: 誰でもスキップを試みられる。未参加なら参加者リストへ動的に加える。
-    const answererIds = session.answererIds.includes(userId)
-      ? session.answererIds
-      : [...session.answererIds, userId];
+    // Participants are re-read and recomputed inside the transaction (see
+    // AnswerFlowService.submitSkip), so activeSession above only locates the session/round.
+    const result = await this.answerFlow.submitSkip(activeSession.id, round, userId);
 
-    const revealed = await this.answerFlow.revealNextBlock(session, round, { answererIds });
-    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.revealedCount);
-    if (revealed.status !== "active") {
+    if (result.kind === "no_session") {
+      return "進行中の挑戦がありません。「挑戦開始」で始めてください。";
+    }
+
+    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
+    if (result.kind === "ended") {
       return `スキップしました。全開示となりました。\n最終状態: ${preview}\n結果: アウト（-1点、記録済み）`;
     }
     return `スキップしました。\n現在の状態: ${preview}`;
