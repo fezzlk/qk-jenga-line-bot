@@ -7,6 +7,7 @@ import {
   createFakePuzzleRoundRepository,
   createFakeTransactor,
 } from "../../testUtils/fakeRepositories.js";
+import type { AnswerSessionRepository } from "../../../src/repositories/AnswerSessionRepository.js";
 import type { AnswerSession, PuzzleRound } from "../../../src/types.js";
 
 const round: PuzzleRound = {
@@ -135,5 +136,36 @@ describe("AnswerUseCase", () => {
 
     expect(reply).toContain("誤答上限");
     expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: -1 }]);
+  });
+
+  it("builds counters from a fresh re-read, not the initial (possibly stale) lookup", async () => {
+    // Mirrors two concurrent answerers: the use case's initial getActiveByGroup() may
+    // already be outdated by the time its transaction runs. Wrap the session repo so
+    // execute() only ever sees the stale snapshot (wrongAnswerCount: 0) via
+    // getActiveByGroup, while the live store (mutated below, simulating the other
+    // request's write) is what the transactional re-read inside AnswerFlowService sees.
+    const staleSnapshot = makeSession({ wrongAnswerCount: 0, wrongAnswerLimit: 5, attemptsPerBlockLimit: 5 });
+    const puzzleRounds = createFakePuzzleRoundRepository([round]);
+    const liveAnswerSessions = createFakeAnswerSessionRepository([staleSnapshot]);
+    const playerStats = createFakePlayerStatsRepository();
+    const answerFlow = new AnswerFlowService(liveAnswerSessions, puzzleRounds, playerStats, createFakeTransactor());
+    const staleViewAnswerSessions: AnswerSessionRepository = {
+      create: liveAnswerSessions.create.bind(liveAnswerSessions),
+      getById: liveAnswerSessions.getById.bind(liveAnswerSessions),
+      update: liveAnswerSessions.update.bind(liveAnswerSessions),
+      getByIdInTransaction: liveAnswerSessions.getByIdInTransaction.bind(liveAnswerSessions),
+      updateInTransaction: liveAnswerSessions.updateInTransaction.bind(liveAnswerSessions),
+      async getActiveByGroup() {
+        return staleSnapshot;
+      },
+    };
+    const useCase = new AnswerUseCase(puzzleRounds, staleViewAnswerSessions, answerFlow);
+
+    await liveAnswerSessions.update("session-1", { wrongAnswerCount: 3 });
+
+    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
+
+    expect(reply).toContain("誤答: 4/5");
+    expect((await liveAnswerSessions.getById("session-1"))?.wrongAnswerCount).toBe(4);
   });
 });

@@ -77,4 +77,63 @@ describe("AnswerFlowService", () => {
       { groupId: "g1", userId: "u2", scoreDelta: -1 },
     ]);
   });
+
+  describe("submitAnswer", () => {
+    it("returns no_session when the session is no longer active by the time it re-reads", async () => {
+      const puzzleRounds = createFakePuzzleRoundRepository([round]);
+      const answerSessions = createFakeAnswerSessionRepository([{ ...session, status: "correct" }]);
+      const playerStats = createFakePlayerStatsRepository();
+      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+
+      const result = await service.submitAnswer(session.id, round, "u1", "ab");
+
+      expect(result).toEqual({ kind: "no_session" });
+    });
+
+    it("re-reads the session by id instead of trusting a caller-supplied snapshot", async () => {
+      const puzzleRounds = createFakePuzzleRoundRepository([round]);
+      const answerSessions = createFakeAnswerSessionRepository([session]);
+      const playerStats = createFakePlayerStatsRepository();
+      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+
+      // Simulates another request's write landing between this caller obtaining
+      // session.id and submitAnswer's transactional re-read.
+      await answerSessions.update(session.id, { wrongAnswerCount: 2, wrongAnswerLimit: 3 });
+
+      const result = await service.submitAnswer(session.id, round, "u1", "zz");
+
+      expect(result.kind).toBe("ended");
+      if (result.kind === "ended") {
+        expect(result.reason).toBe("wrong_limit");
+        expect(result.session.wrongAnswerCount).toBe(3);
+      }
+    });
+  });
+
+  describe("submitSkip", () => {
+    it("returns no_session when the session is no longer active by the time it re-reads", async () => {
+      const puzzleRounds = createFakePuzzleRoundRepository([round]);
+      const answerSessions = createFakeAnswerSessionRepository([{ ...session, status: "fully_revealed" }]);
+      const playerStats = createFakePlayerStatsRepository();
+      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+
+      const result = await service.submitSkip(session.id, round, "u1");
+
+      expect(result).toEqual({ kind: "no_session" });
+    });
+
+    it("adds a first-time skipper to answererIds based on the re-read session", async () => {
+      const puzzleRounds = createFakePuzzleRoundRepository([round]);
+      const answerSessions = createFakeAnswerSessionRepository([session]);
+      const playerStats = createFakePlayerStatsRepository();
+      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+
+      const result = await service.submitSkip(session.id, round, "u2");
+
+      expect(result.kind).toBe("revealed");
+      if (result.kind === "revealed") {
+        expect(result.session.answererIds).toEqual(["u1", "u2"]);
+      }
+    });
+  });
 });
