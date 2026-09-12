@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// All access to this project's Firestore goes through the LINE bot server
+// (firebase-admin, which bypasses these rules) — there is no client-side
+// Firestore access, so client reads/writes are denied entirely.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -35,10 +35,9 @@ steps:
       - "--max-instances=10"
       - "--allow-unauthenticated"
       - "--service-account=qk-jenga-line-bot-run@qk-jenga-line-bot.iam.gserviceaccount.com"
-      # TODO: 環境変数を設定
-      # - "--set-env-vars=KEY=VALUE"
-      # TODO: Secret Managerのシークレットを設定
-      # - "--update-secrets=ENV_VAR=secret-name:latest"
+      # デプロイ前に、Secret Managerへ以下2つのシークレットを作成しておくこと（このリポジトリの
+      # コードは作成しない。gcloud secrets create line-channel-secret / line-channel-access-token）。
+      - "--update-secrets=LINE_CHANNEL_SECRET=line-channel-secret:latest,LINE_CHANNEL_ACCESS_TOKEN=line-channel-access-token:latest"
 
 options:
   logging: CLOUD_LOGGING_ONLY
