@@ -32,23 +32,27 @@ export class AnswerUseCase implements CommandUseCase {
       : [...session.answererIds, userId];
 
     if (answerText === round.sourceText) {
-      await this.answerFlow.endSession(session, round, "correct", { answererIds });
+      const { score } = await this.answerFlow.endSession(session, round, "correct", { answererIds });
       const preview = renderRevealedText(round.sourceText, round.hiddenPositions, round.hiddenPositions.length);
-      return `正解です！\n答え: ${preview}\n結果: アウト（正解到達、-1点、記録済み）`;
+      return `正解です！\n答え: ${preview}\n結果: アウト（正解到達、${score >= 0 ? "+" : ""}${score}点、記録済み）`;
     }
 
     const wrongAnswerCount = session.wrongAnswerCount + 1;
     if (wrongAnswerCount >= session.wrongAnswerLimit) {
-      await this.answerFlow.endSession(session, round, "wrong_limit", { wrongAnswerCount, answererIds });
-      return `誤答上限（${session.wrongAnswerLimit}回）に達しました。\n結果: アウト（-1点、記録済み）`;
+      const { score } = await this.answerFlow.endSession(session, round, "wrong_limit", {
+        wrongAnswerCount,
+        answererIds,
+      });
+      return `誤答上限（${session.wrongAnswerLimit}回）に達しました。\n結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`;
     }
 
     const currentStepAttempts = session.currentStepAttempts + 1;
     if (currentStepAttempts >= session.attemptsPerBlockLimit) {
       const revealed = await this.answerFlow.revealNextBlock(session, round, { wrongAnswerCount, answererIds });
-      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.revealedCount);
-      if (revealed.status !== "active") {
-        return `不正解です。この位置での回答上限に達し、全開示となりました。\n最終状態: ${preview}\n結果: アウト（-1点、記録済み）`;
+      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.session.revealedCount);
+      if (revealed.session.status !== "active") {
+        const score = revealed.score ?? 0;
+        return `不正解です。この位置での回答上限に達し、全開示となりました。\n最終状態: ${preview}\n結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`;
       }
       return `不正解です。この位置での回答上限に達したため次を開示します。\n現在の状態: ${preview}\n誤答: ${wrongAnswerCount}/${session.wrongAnswerLimit}`;
     }
