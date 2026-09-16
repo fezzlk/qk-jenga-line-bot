@@ -2,7 +2,13 @@ import { PuzzleRoundRepository } from "../../repositories/PuzzleRoundRepository.
 import { AnswerSessionRepository } from "../../repositories/AnswerSessionRepository.js";
 import { AnswerFlowService } from "../../services/AnswerFlowService.js";
 import { renderRevealedText } from "../../domain/services/textPuzzle.js";
-import { DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT, DEFAULT_WRONG_ANSWER_LIMIT } from "../../types.js";
+import {
+  DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT,
+  DEFAULT_SCORE_CORRECT,
+  DEFAULT_SCORE_FULLY_REVEALED,
+  DEFAULT_SCORE_WRONG_LIMIT,
+  DEFAULT_WRONG_ANSWER_LIMIT,
+} from "../../types.js";
 import type { CommandInput, CommandUseCase } from "../commandTypes.js";
 
 export class StartChallengeUseCase implements CommandUseCase {
@@ -27,6 +33,9 @@ export class StartChallengeUseCase implements CommandUseCase {
       currentStepAttempts: 0,
       wrongAnswerLimit: DEFAULT_WRONG_ANSWER_LIMIT,
       attemptsPerBlockLimit: DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT,
+      scoreCorrect: DEFAULT_SCORE_CORRECT,
+      scoreWrongLimit: DEFAULT_SCORE_WRONG_LIMIT,
+      scoreFullyRevealed: DEFAULT_SCORE_FULLY_REVEALED,
       status: "active",
       startedAt: Date.now(),
       endedAt: null,
@@ -34,10 +43,11 @@ export class StartChallengeUseCase implements CommandUseCase {
     await this.puzzleRounds.update(round.id, { phase: "in_challenge" });
 
     const revealed = await this.answerFlow.revealNextBlock(session, round);
-    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.revealedCount);
+    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.session.revealedCount);
 
-    if (revealed.status !== "active") {
-      return `挑戦を開始しましたが、1箇所しかない問題だったため即座に全開示となりました。\n最終状態: ${preview}\n結果: アウト（-1点、記録済み）`;
+    if (revealed.session.status !== "active") {
+      const score = revealed.score ?? 0;
+      return `挑戦を開始しましたが、1箇所しかない問題だったため即座に全開示となりました。\n最終状態: ${preview}\n結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`;
     }
 
     return (
