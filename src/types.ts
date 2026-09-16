@@ -1,6 +1,8 @@
 export const DEFAULT_WRONG_ANSWER_LIMIT = 3;
 export const DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT = 1;
-export const OUT_SCORE_PENALTY = -1;
+export const DEFAULT_SCORE_CORRECT = 1;
+export const DEFAULT_SCORE_WRONG_LIMIT = -1;
+export const DEFAULT_SCORE_FULLY_REVEALED = 0;
 
 // Single categorical field (not separate booleans) so every Firestore lookup
 // used by the use cases stays equality-only on (groupId, phase) and never
@@ -45,6 +47,9 @@ export type AnswerSession = {
   currentStepAttempts: number;
   wrongAnswerLimit: number;
   attemptsPerBlockLimit: number;
+  scoreCorrect: number;
+  scoreWrongLimit: number;
+  scoreFullyRevealed: number;
   status: AnswerSessionStatus;
   startedAt: number;
   endedAt: number | null;
