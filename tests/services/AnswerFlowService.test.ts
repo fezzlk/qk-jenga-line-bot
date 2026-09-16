@@ -31,6 +31,9 @@ const session: AnswerSession = {
   currentStepAttempts: 0,
   wrongAnswerLimit: 3,
   attemptsPerBlockLimit: 1,
+  scoreCorrect: 1,
+  scoreWrongLimit: -1,
+  scoreFullyRevealed: 0,
   status: "active",
   startedAt: 0,
   endedAt: null,
@@ -45,12 +48,13 @@ describe("AnswerFlowService", () => {
 
     const result = await service.revealNextBlock(session, round);
 
-    expect(result.status).toBe("active");
-    expect(result.revealedCount).toBe(1);
+    expect(result.session.status).toBe("active");
+    expect(result.session.revealedCount).toBe(1);
+    expect(result.score).toBeNull();
     expect(playerStats.calls).toHaveLength(0);
   });
 
-  it("ends the session as fully_revealed on the last block and records -1", async () => {
+  it("ends the session as fully_revealed on the last block and records 0", async () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const answerSessions = createFakeAnswerSessionRepository([session]);
     const playerStats = createFakePlayerStatsRepository();
@@ -58,23 +62,25 @@ describe("AnswerFlowService", () => {
 
     const result = await service.revealNextBlock({ ...session, revealedCount: 1 }, round);
 
-    expect(result.status).toBe("fully_revealed");
-    expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: -1 }]);
+    expect(result.session.status).toBe("fully_revealed");
+    expect(result.score).toBe(0);
+    expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: 0 }]);
     const closedRound = await puzzleRounds.getById("round-1");
     expect(closedRound?.phase).toBe("closed");
   });
 
-  it("records -1 for every id in extraPatch.answererIds when a new participant just joined", async () => {
+  it("records +1 for every id in extraPatch.answererIds when a new participant just joined", async () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const answerSessions = createFakeAnswerSessionRepository([session]);
     const playerStats = createFakePlayerStatsRepository();
     const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
 
-    await service.endSession(session, round, "correct", { answererIds: ["u1", "u2"] });
+    const { score } = await service.endSession(session, round, "correct", { answererIds: ["u1", "u2"] });
 
+    expect(score).toBe(1);
     expect(playerStats.calls).toEqual([
-      { groupId: "g1", userId: "u1", scoreDelta: -1 },
-      { groupId: "g1", userId: "u2", scoreDelta: -1 },
+      { groupId: "g1", userId: "u1", scoreDelta: 1 },
+      { groupId: "g1", userId: "u2", scoreDelta: 1 },
     ]);
   });
 });
