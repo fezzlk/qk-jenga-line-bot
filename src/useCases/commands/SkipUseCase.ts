@@ -27,9 +27,10 @@ export class SkipUseCase implements CommandUseCase {
       : [...session.answererIds, userId];
 
     const revealed = await this.answerFlow.revealNextBlock(session, round, { answererIds });
-    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.revealedCount);
-    if (revealed.status !== "active") {
-      return `スキップしました。全開示となりました。\n最終状態: ${preview}\n結果: アウト（-1点、記録済み）`;
+    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.session.revealedCount);
+    if (revealed.session.status !== "active") {
+      const score = revealed.score ?? 0;
+      return `スキップしました。全開示となりました。\n最終状態: ${preview}\n結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`;
     }
     return `スキップしました。\n現在の状態: ${preview}`;
   }
