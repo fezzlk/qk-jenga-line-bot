@@ -43,6 +43,9 @@ describe("SkipUseCase", () => {
       currentStepAttempts: 0,
       wrongAnswerLimit: 3,
       attemptsPerBlockLimit: 1,
+      scoreCorrect: 1,
+      scoreWrongLimit: -1,
+      scoreFullyRevealed: 0,
       status: "active",
       startedAt: 0,
       endedAt: null,
@@ -67,6 +70,9 @@ describe("SkipUseCase", () => {
       currentStepAttempts: 0,
       wrongAnswerLimit: 3,
       attemptsPerBlockLimit: 1,
+      scoreCorrect: 1,
+      scoreWrongLimit: -1,
+      scoreFullyRevealed: 0,
       status: "active",
       startedAt: 0,
       endedAt: null,
@@ -78,7 +84,7 @@ describe("SkipUseCase", () => {
     expect((await answerSessions.getById("session-1"))?.answererIds).toEqual(["u1", "someone-else"]);
   });
 
-  it("ends the session as fully_revealed when the last block is skipped, recording -1 for every participant", async () => {
+  it("ends the session as fully_revealed when the last block is skipped, recording 0 for every participant", async () => {
     const session: AnswerSession = {
       id: "session-1",
       puzzleRoundId: "round-1",
@@ -89,6 +95,9 @@ describe("SkipUseCase", () => {
       currentStepAttempts: 0,
       wrongAnswerLimit: 3,
       attemptsPerBlockLimit: 1,
+      scoreCorrect: 1,
+      scoreWrongLimit: -1,
+      scoreFullyRevealed: 0,
       status: "active",
       startedAt: 0,
       endedAt: null,
@@ -99,8 +108,8 @@ describe("SkipUseCase", () => {
 
     expect(reply).toContain("全開示となりました");
     expect(playerStats.calls).toEqual([
-      { groupId: "g1", userId: "u1", scoreDelta: -1 },
-      { groupId: "g1", userId: "u2", scoreDelta: -1 },
+      { groupId: "g1", userId: "u1", scoreDelta: 0 },
+      { groupId: "g1", userId: "u2", scoreDelta: 0 },
     ]);
   });
 });
