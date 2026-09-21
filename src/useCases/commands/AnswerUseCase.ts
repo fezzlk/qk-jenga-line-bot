@@ -26,39 +26,33 @@ export class AnswerUseCase implements CommandUseCase {
       throw new Error(`PuzzleRound not found for active session: ${session.puzzleRoundId}`);
     }
 
-    // 先着順: 誰でも回答を試みられる。未参加なら参加者リストへ動的に加える。
-    const answererIds = session.answererIds.includes(userId)
-      ? session.answererIds
-      : [...session.answererIds, userId];
+    // wrongAnswerCount/currentStepAttempts/answererIds are re-read and recomputed
+    // inside AnswerFlowService.submitAnswer's own transaction (FEZ-166), so `session`
+    // above is only used to locate the session/round; its counter fields may already
+    // be stale by the time submitAnswer's transaction runs, and must not be used
+    // to build the reply message below.
+    const result = await this.answerFlow.submitAnswer(session.id, round, userId, answerText);
 
-    if (answerText === round.sourceText) {
-      const { score } = await this.answerFlow.endSession(session, round, "correct", { answererIds });
+    if (result.outcome === "correct") {
       const preview = renderRevealedText(round.sourceText, round.hiddenPositions, round.hiddenPositions.length);
-      return `正解です！\n答え: ${preview}\n結果: アウト（正解到達、${score >= 0 ? "+" : ""}${score}点、記録済み）`;
+      return `正解です！\n答え: ${preview}\n結果: アウト（正解到達、${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;
     }
 
-    const wrongAnswerCount = session.wrongAnswerCount + 1;
-    if (wrongAnswerCount >= session.wrongAnswerLimit) {
-      const { score } = await this.answerFlow.endSession(session, round, "wrong_limit", {
-        wrongAnswerCount,
-        answererIds,
-      });
-      return `誤答上限（${session.wrongAnswerLimit}回）に達しました。\n結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`;
+    if (result.outcome === "wrong_limit") {
+      return `誤答上限（${result.session.wrongAnswerLimit}回）に達しました。\n結果: アウト（${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;
     }
 
-    const currentStepAttempts = session.currentStepAttempts + 1;
-    if (currentStepAttempts >= session.attemptsPerBlockLimit) {
-      const revealed = await this.answerFlow.revealNextBlock(session, round, { wrongAnswerCount, answererIds });
-      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.session.revealedCount);
-      if (revealed.session.status !== "active") {
-        const score = revealed.score ?? 0;
-        return `不正解です。この位置での回答上限に達し、全開示となりました。\n最終状態: ${preview}\n結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`;
-      }
-      return `不正解です。この位置での回答上限に達したため次を開示します。\n現在の状態: ${preview}\n誤答: ${wrongAnswerCount}/${session.wrongAnswerLimit}`;
+    if (result.outcome === "fully_revealed") {
+      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
+      return `不正解です。この位置での回答上限に達し、全開示となりました。\n最終状態: ${preview}\n結果: アウト（${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;
     }
 
-    await this.answerSessions.update(session.id, { wrongAnswerCount, currentStepAttempts, answererIds });
-    const remainingAttempts = session.attemptsPerBlockLimit - currentStepAttempts;
-    return `不正解です。この位置であと${remainingAttempts}回回答できます。誤答: ${wrongAnswerCount}/${session.wrongAnswerLimit}`;
+    if (result.outcome === "continue_revealed") {
+      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
+      return `不正解です。この位置での回答上限に達したため次を開示します。\n現在の状態: ${preview}\n誤答: ${result.session.wrongAnswerCount}/${result.session.wrongAnswerLimit}`;
+    }
+
+    const remainingAttempts = result.session.attemptsPerBlockLimit - result.session.currentStepAttempts;
+    return `不正解です。この位置であと${remainingAttempts}回回答できます。誤答: ${result.session.wrongAnswerCount}/${result.session.wrongAnswerLimit}`;
   }
 }
