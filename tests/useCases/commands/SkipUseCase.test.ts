@@ -7,6 +7,7 @@ import {
   createFakePuzzleRoundRepository,
   createFakeTransactor,
 } from "../../testUtils/fakeRepositories.js";
+import type { AnswerSessionRepository } from "../../../src/repositories/AnswerSessionRepository.js";
 import type { AnswerSession, PuzzleRound } from "../../../src/types.js";
 
 const round: PuzzleRound = {
@@ -111,5 +112,53 @@ describe("SkipUseCase", () => {
       { groupId: "g1", userId: "u1", scoreDelta: 0 },
       { groupId: "g1", userId: "u2", scoreDelta: 0 },
     ]);
+  });
+
+  it("builds revealedCount from a fresh re-read, not the initial (possibly stale) lookup", async () => {
+    // Mirrors two concurrent participants: the use case's initial getActiveByGroup() may
+    // already be outdated by the time AnswerFlowService.submitSkip's transaction runs.
+    // Wrap the session repo so execute() only ever sees the stale snapshot
+    // (revealedCount: 0) via getActiveByGroup, while the live store (mutated below,
+    // simulating the other request's write) is what the transactional re-read sees.
+    const staleSnapshot: AnswerSession = {
+      id: "session-1",
+      puzzleRoundId: "round-1",
+      groupId: "g1",
+      answererIds: ["u1"],
+      revealedCount: 0,
+      wrongAnswerCount: 0,
+      currentStepAttempts: 0,
+      wrongAnswerLimit: 3,
+      attemptsPerBlockLimit: 1,
+      scoreCorrect: 1,
+      scoreWrongLimit: -1,
+      scoreFullyRevealed: 0,
+      status: "active",
+      startedAt: 0,
+      endedAt: null,
+    };
+    const puzzleRounds = createFakePuzzleRoundRepository([round]);
+    const liveAnswerSessions = createFakeAnswerSessionRepository([staleSnapshot]);
+    const playerStats = createFakePlayerStatsRepository();
+    const answerFlow = new AnswerFlowService(liveAnswerSessions, puzzleRounds, playerStats, createFakeTransactor());
+    const staleViewAnswerSessions: AnswerSessionRepository = {
+      create: liveAnswerSessions.create.bind(liveAnswerSessions),
+      getById: liveAnswerSessions.getById.bind(liveAnswerSessions),
+      update: liveAnswerSessions.update.bind(liveAnswerSessions),
+      getByIdInTransaction: liveAnswerSessions.getByIdInTransaction.bind(liveAnswerSessions),
+      updateInTransaction: liveAnswerSessions.updateInTransaction.bind(liveAnswerSessions),
+      async getActiveByGroup() {
+        return staleSnapshot;
+      },
+    };
+    const useCase = new SkipUseCase(puzzleRounds, staleViewAnswerSessions, answerFlow);
+
+    // A concurrent skip already revealed the first (of two) blocks.
+    await liveAnswerSessions.update("session-1", { revealedCount: 1 });
+
+    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
+
+    expect(reply).toContain("全開示となりました");
+    expect((await liveAnswerSessions.getById("session-1"))?.revealedCount).toBe(2);
   });
 });
