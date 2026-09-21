@@ -21,17 +21,17 @@ export class SkipUseCase implements CommandUseCase {
       throw new Error(`PuzzleRound not found for active session: ${session.puzzleRoundId}`);
     }
 
-    // 先着順: 誰でもスキップを試みられる。未参加なら参加者リストへ動的に加える。
-    const answererIds = session.answererIds.includes(userId)
-      ? session.answererIds
-      : [...session.answererIds, userId];
+    // revealedCount/answererIds are re-read and recomputed inside
+    // AnswerFlowService.submitSkip's own transaction (FEZ-166), so `session` above
+    // is only used to locate the session/round.
+    const result = await this.answerFlow.submitSkip(session.id, round, userId);
 
-    const revealed = await this.answerFlow.revealNextBlock(session, round, { answererIds });
-    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.session.revealedCount);
-    if (revealed.session.status !== "active") {
-      const score = revealed.score ?? 0;
-      return `スキップしました。全開示となりました。\n最終状態: ${preview}\n結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`;
+    if (result.outcome === "fully_revealed") {
+      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
+      return `スキップしました。全開示となりました。\n最終状態: ${preview}\n結果: アウト（${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;
     }
+
+    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
     return `スキップしました。\n現在の状態: ${preview}`;
   }
 }
