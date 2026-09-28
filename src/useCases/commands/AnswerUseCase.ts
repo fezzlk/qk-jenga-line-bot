@@ -33,6 +33,10 @@ export class AnswerUseCase implements CommandUseCase {
     // to build the reply message below.
     const result = await this.answerFlow.submitAnswer(session.id, round, userId, answerText);
 
+    if (result.outcome === "already_ended") {
+      return "この挑戦は既に終了しています。";
+    }
+
     if (result.outcome === "correct") {
       const preview = renderRevealedText(round.sourceText, round.hiddenPositions, round.hiddenPositions.length);
       return `正解です！\n答え: ${preview}\n結果: アウト（正解到達、${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;

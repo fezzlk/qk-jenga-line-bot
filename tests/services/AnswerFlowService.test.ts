@@ -190,6 +190,23 @@ describe("AnswerFlowService", () => {
       }
       expect(playerStats.calls).toHaveLength(0);
     });
+
+    it("returns already_ended without recording score when a concurrent request already ended the session (FEZ-224)", async () => {
+      const puzzleRounds = createFakePuzzleRoundRepository([round]);
+      const answerSessions = createFakeAnswerSessionRepository([session]);
+      const playerStats = createFakePlayerStatsRepository();
+      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+
+      // Simulates a concurrent submitAnswer/submitSkip whose transaction already
+      // ended the session between this caller's pre-transaction lookup and its
+      // own transactional re-read.
+      await answerSessions.update(session.id, { status: "correct", endedAt: 1 });
+
+      const result = await service.submitAnswer(session.id, round, "u1", "ab");
+
+      expect(result.outcome).toBe("already_ended");
+      expect(playerStats.calls).toHaveLength(0);
+    });
   });
 
   describe("submitSkip", () => {
@@ -224,6 +241,21 @@ describe("AnswerFlowService", () => {
         expect(result.session.revealedCount).toBe(1);
         expect(result.session.answererIds).toEqual(["u1", "u2"]);
       }
+      expect(playerStats.calls).toHaveLength(0);
+    });
+
+    it("returns already_ended without recording score when a concurrent request already ended the session (FEZ-224)", async () => {
+      const puzzleRounds = createFakePuzzleRoundRepository([round]);
+      const answerSessions = createFakeAnswerSessionRepository([session]);
+      const playerStats = createFakePlayerStatsRepository();
+      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+
+      // Simulates a concurrent submitAnswer already having ended the session.
+      await answerSessions.update(session.id, { status: "wrong_limit", endedAt: 1 });
+
+      const result = await service.submitSkip(session.id, round, "u2");
+
+      expect(result.outcome).toBe("already_ended");
       expect(playerStats.calls).toHaveLength(0);
     });
   });

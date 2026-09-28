@@ -26,6 +26,10 @@ export class SkipUseCase implements CommandUseCase {
     // is only used to locate the session/round.
     const result = await this.answerFlow.submitSkip(session.id, round, userId);
 
+    if (result.outcome === "already_ended") {
+      return "この挑戦は既に終了しています。";
+    }
+
     if (result.outcome === "fully_revealed") {
       const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
       return `スキップしました。全開示となりました。\n最終状態: ${preview}\n結果: アウト（${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;
