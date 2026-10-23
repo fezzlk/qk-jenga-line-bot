@@ -4,7 +4,9 @@ import { createWebhookRouter } from "./routes/webhook.js";
 
 const app = express();
 
-app.get("/healthz", (_req, res) => {
+// Not "/healthz": Cloud Run reserves some paths ending in "z" and answers them itself
+// with a 404 before the request reaches the container.
+app.get("/health", (_req, res) => {
   res.status(200).send("ok");
 });
 
