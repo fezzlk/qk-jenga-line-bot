@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   cellCount,
   cellRect,
-  correctAnswerOf,
   maskedCellIndices,
 } from "../../../src/domain/services/imagePuzzle.js";
+import { correctAnswerOf } from "../../../src/domain/services/puzzleRound.js";
 import { IMAGE_GRID_SIZES, type ImagePuzzleRound } from "../../../src/types.js";
 
 function imageRound(overrides: Partial<ImagePuzzleRound> = {}): ImagePuzzleRound {
@@ -18,7 +18,9 @@ function imageRound(overrides: Partial<ImagePuzzleRound> = {}): ImagePuzzleRound
     answerText: "東京タワー",
     totalHideCount: 9,
     participantIds: [],
-    lastHiderId: null,
+    participantNames: {},
+    turnIndex: 0,
+    pendingInput: null,
     hiddenPositions: [],
     phase: "creating",
     createdAt: 0,

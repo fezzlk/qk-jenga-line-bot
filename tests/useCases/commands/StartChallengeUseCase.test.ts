@@ -19,7 +19,10 @@ function makeRound(overrides: Partial<TextPuzzleRound> = {}): TextPuzzleRound {
     sourceText: "abc",
     totalHideCount: 3,
     participantIds: ["u1", "u2"],
-    lastHiderId: "u2",
+    creatorId: "creator",
+    participantNames: {},
+    turnIndex: 0,
+    pendingInput: null,
     hiddenPositions: [0, 1, 2],
     phase: "ready_to_challenge",
     createdAt: 0,
@@ -45,7 +48,7 @@ describe("StartChallengeUseCase", () => {
       createFakePuzzlePreview(),
     );
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u3", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u3" });
 
     expect(textOf(reply)).toContain("挑戦を開始しました");
     const round = await puzzleRounds.getById("round-1");
@@ -72,7 +75,7 @@ describe("StartChallengeUseCase", () => {
       createFakePuzzlePreview(),
     );
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u3", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u3" });
 
     expect(textOf(reply)).toContain("挑戦できるパズルラウンドがありません");
   });

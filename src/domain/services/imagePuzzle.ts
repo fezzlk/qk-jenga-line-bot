@@ -1,4 +1,4 @@
-import type { ImageGridSize, ImagePuzzleRound, PuzzleRound } from "../../types.js";
+import type { ImageGridSize, ImagePuzzleRound } from "../../types.js";
 
 export type CellRect = { x: number; y: number; width: number; height: number };
 
@@ -22,12 +22,6 @@ export function requireReadyImageRound(round: ImagePuzzleRound): ReadyImagePuzzl
     throw new Error(`Image round setup is incomplete: ${round.id}`);
   }
   return round;
-}
-
-/** The string an answer must exactly match: the text itself, or the image round's registered answer. */
-export function correctAnswerOf(round: PuzzleRound): string {
-  if (round.sourceType === "text") return round.sourceText;
-  return requireReadyImageRound(round).answerText;
 }
 
 /**

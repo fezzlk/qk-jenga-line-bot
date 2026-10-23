@@ -9,6 +9,7 @@ function toEntity(id: string, data: FirebaseFirestore.DocumentData): AnswerSessi
     puzzleRoundId: data.puzzleRoundId,
     groupId: data.groupId,
     answererIds: data.answererIds,
+    answerModeUserIds: data.answerModeUserIds ?? [],
     revealedCount: data.revealedCount,
     wrongAnswerCount: data.wrongAnswerCount,
     currentStepAttempts: data.currentStepAttempts,

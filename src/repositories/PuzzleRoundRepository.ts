@@ -9,13 +9,17 @@ import {
 
 const COLLECTION = "puzzleRounds";
 
+// Fields added after the first deploy fall back to defaults, so older documents still load.
 function toEntity(id: string, data: FirebaseFirestore.DocumentData): PuzzleRound {
   const common = {
     id,
     groupId: data.groupId,
+    creatorId: data.creatorId ?? "",
     totalHideCount: data.totalHideCount,
-    participantIds: data.participantIds,
-    lastHiderId: data.lastHiderId,
+    participantIds: data.participantIds ?? [],
+    participantNames: data.participantNames ?? {},
+    turnIndex: data.turnIndex ?? 0,
+    pendingInput: data.pendingInput ?? null,
     hiddenPositions: data.hiddenPositions,
     phase: data.phase,
     createdAt: data.createdAt,
@@ -24,13 +28,12 @@ function toEntity(id: string, data: FirebaseFirestore.DocumentData): PuzzleRound
     return {
       ...common,
       sourceType: "image",
-      creatorId: data.creatorId,
       sourceImagePath: data.sourceImagePath ?? null,
       gridSize: data.gridSize ?? null,
       answerText: data.answerText ?? null,
     };
   }
-  return { ...common, sourceType: "text", sourceText: data.sourceText };
+  return { ...common, sourceType: "text", sourceText: data.sourceText ?? null };
 }
 
 export class PuzzleRoundRepository {
