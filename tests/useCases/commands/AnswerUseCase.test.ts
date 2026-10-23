@@ -208,4 +208,16 @@ describe("AnswerUseCase", () => {
     expect(textOf(reply)).toContain("誤答: 4/5");
     expect((await liveAnswerSessions.getById("session-1"))?.wrongAnswerCount).toBe(4);
   });
+
+  it("replies that the challenge is over, without scoring, if it ended concurrently (FEZ-224)", async () => {
+    // The caller looked the session up while it was still active; another request then
+    // ended it before this answer's transaction re-read it.
+    const { active, useCase, answerSessions, playerStats } = build(makeSession());
+    await answerSessions.update("session-1", { status: "correct" });
+
+    const reply = await useCase.submitAnswer(active, "u1", "ab");
+
+    expect(textOf(reply)).toBe("この挑戦は既に終了しています。");
+    expect(playerStats.calls).toEqual([]);
+  });
 });

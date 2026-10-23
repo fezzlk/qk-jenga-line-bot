@@ -66,7 +66,7 @@ export class AnswerUseCase {
     const result = await this.answerFlow.submitAnswer(session.id, round, userId, answerText);
 
     if (result.outcome === "already_ended") {
-      return "この挑戦は既に終了しています。";
+      return [textMessage("この挑戦は既に終了しています。")];
     }
 
     if (result.outcome === "correct") {

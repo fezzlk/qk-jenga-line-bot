@@ -48,7 +48,7 @@ export class SkipUseCase implements CommandUseCase {
     const result = await this.answerFlow.submitSkip(session.id, round, userId);
 
     if (result.outcome === "already_ended") {
-      return "この挑戦は既に終了しています。";
+      return [textMessage("この挑戦は既に終了しています。")];
     }
 
     if (result.outcome === "fully_revealed") {
