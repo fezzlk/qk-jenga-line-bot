@@ -1,7 +1,9 @@
+import { textOf } from "../../../src/lineMessages.js";
 import { describe, expect, it } from "vitest";
 import { SkipUseCase } from "../../../src/useCases/commands/SkipUseCase.js";
 import { AnswerFlowService } from "../../../src/services/AnswerFlowService.js";
 import {
+  createFakePuzzlePreview,
   createFakeAnswerSessionRepository,
   createFakePlayerStatsRepository,
   createFakePuzzleRoundRepository,
@@ -27,8 +29,18 @@ function build(session: AnswerSession) {
   const puzzleRounds = createFakePuzzleRoundRepository([round]);
   const answerSessions = createFakeAnswerSessionRepository([session]);
   const playerStats = createFakePlayerStatsRepository();
-  const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
-  const useCase = new SkipUseCase(puzzleRounds, answerSessions, answerFlow);
+  const answerFlow = new AnswerFlowService(
+    answerSessions,
+    puzzleRounds,
+    playerStats,
+    createFakeTransactor(),
+  );
+  const useCase = new SkipUseCase(
+    puzzleRounds,
+    answerSessions,
+    answerFlow,
+    createFakePuzzlePreview(),
+  );
   return { useCase, answerSessions, playerStats };
 }
 
@@ -55,7 +67,7 @@ describe("SkipUseCase", () => {
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
 
-    expect(reply).toContain("スキップしました");
+    expect(textOf(reply)).toContain("スキップしました");
     expect((await answerSessions.getById("session-1"))?.revealedCount).toBe(1);
     expect(playerStats.calls).toHaveLength(0);
   });
@@ -82,7 +94,10 @@ describe("SkipUseCase", () => {
 
     await useCase.execute({ groupId: "g1", userId: "someone-else", args: "" });
 
-    expect((await answerSessions.getById("session-1"))?.answererIds).toEqual(["u1", "someone-else"]);
+    expect((await answerSessions.getById("session-1"))?.answererIds).toEqual([
+      "u1",
+      "someone-else",
+    ]);
   });
 
   it("ends the session as fully_revealed when the last block is skipped, recording 0 for every participant", async () => {
@@ -107,7 +122,7 @@ describe("SkipUseCase", () => {
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u2", args: "" });
 
-    expect(reply).toContain("全開示となりました");
+    expect(textOf(reply)).toContain("全開示となりました");
     expect(playerStats.calls).toEqual([
       { groupId: "g1", userId: "u1", scoreDelta: 0 },
       { groupId: "g1", userId: "u2", scoreDelta: 0 },
@@ -140,7 +155,12 @@ describe("SkipUseCase", () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const liveAnswerSessions = createFakeAnswerSessionRepository([staleSnapshot]);
     const playerStats = createFakePlayerStatsRepository();
-    const answerFlow = new AnswerFlowService(liveAnswerSessions, puzzleRounds, playerStats, createFakeTransactor());
+    const answerFlow = new AnswerFlowService(
+      liveAnswerSessions,
+      puzzleRounds,
+      playerStats,
+      createFakeTransactor(),
+    );
     const staleViewAnswerSessions: AnswerSessionRepository = {
       create: liveAnswerSessions.create.bind(liveAnswerSessions),
       getById: liveAnswerSessions.getById.bind(liveAnswerSessions),
@@ -151,14 +171,19 @@ describe("SkipUseCase", () => {
         return staleSnapshot;
       },
     };
-    const useCase = new SkipUseCase(puzzleRounds, staleViewAnswerSessions, answerFlow);
+    const useCase = new SkipUseCase(
+      puzzleRounds,
+      staleViewAnswerSessions,
+      answerFlow,
+      createFakePuzzlePreview(),
+    );
 
     // A concurrent skip already revealed the first (of two) blocks.
     await liveAnswerSessions.update("session-1", { revealedCount: 1 });
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
 
-    expect(reply).toContain("全開示となりました");
+    expect(textOf(reply)).toContain("全開示となりました");
     expect((await liveAnswerSessions.getById("session-1"))?.revealedCount).toBe(2);
   });
 });

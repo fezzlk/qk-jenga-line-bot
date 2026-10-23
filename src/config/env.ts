@@ -14,4 +14,9 @@ export const env = {
   get lineChannelAccessToken(): string {
     return requireEnv("LINE_CHANNEL_ACCESS_TOKEN");
   },
+  // Private bucket for image puzzles. Only read when an image round is actually used,
+  // so text-only deployments keep working without it.
+  get puzzleImagesBucket(): string {
+    return requireEnv("PUZZLE_IMAGES_BUCKET");
+  },
 };

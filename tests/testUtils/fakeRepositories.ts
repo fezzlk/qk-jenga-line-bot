@@ -3,8 +3,12 @@ import type { AnswerSessionRepository } from "../../src/repositories/AnswerSessi
 import type { PlayerStatsRepository } from "../../src/repositories/PlayerStatsRepository.js";
 import type { Transactor } from "../../src/repositories/Transactor.js";
 import type { AnswerSession, PlayerStats, PuzzleRound } from "../../src/types.js";
+import type { PuzzleImageStore } from "../../src/services/PuzzleImageService.js";
+import { PuzzlePreviewService } from "../../src/services/PuzzlePreviewService.js";
 
-export function createFakePuzzleRoundRepository(initial: PuzzleRound[] = []): PuzzleRoundRepository {
+export function createFakePuzzleRoundRepository(
+  initial: PuzzleRound[] = [],
+): PuzzleRoundRepository {
   const rounds = new Map<string, PuzzleRound>();
   let nextId = 1;
   for (const round of initial) rounds.set(round.id, round);
@@ -23,12 +27,14 @@ export function createFakePuzzleRoundRepository(initial: PuzzleRound[] = []): Pu
       return [...rounds.values()].find((r) => r.groupId === groupId && r.phase === phase) ?? null;
     },
     async getActiveByGroup(groupId) {
-      return [...rounds.values()].find((r) => r.groupId === groupId && r.phase !== "closed") ?? null;
+      return (
+        [...rounds.values()].find((r) => r.groupId === groupId && r.phase !== "closed") ?? null
+      );
     },
     async update(id, patch) {
       const existing = rounds.get(id);
       if (!existing) throw new Error(`not found: ${id}`);
-      rounds.set(id, { ...existing, ...patch });
+      rounds.set(id, { ...existing, ...patch } as PuzzleRound);
     },
     // Fakes have no real Firestore transaction, so these just perform the same
     // synchronous map read/write as their non-transactional counterparts above.
@@ -38,7 +44,7 @@ export function createFakePuzzleRoundRepository(initial: PuzzleRound[] = []): Pu
     updateInTransaction(_txn, id, patch) {
       const existing = rounds.get(id);
       if (!existing) throw new Error(`not found: ${id}`);
-      rounds.set(id, { ...existing, ...patch });
+      rounds.set(id, { ...existing, ...patch } as PuzzleRound);
     },
   };
 }
@@ -122,4 +128,32 @@ export function createFakeTransactor(): Transactor {
       return fn({} as FirebaseFirestore.Transaction);
     },
   };
+}
+
+export type FakePuzzleImageStore = PuzzleImageStore & {
+  storedSources: Buffer[];
+  renders: { roundId: string; revealedCount: number; numbered: boolean }[];
+};
+
+/** In-memory stand-in for PuzzleImageService: records calls and returns fake URLs. */
+export function createFakePuzzleImageStore(): FakePuzzleImageStore {
+  const storedSources: Buffer[] = [];
+  const renders: FakePuzzleImageStore["renders"] = [];
+  return {
+    storedSources,
+    renders,
+    async storeSourceImage(rawImage) {
+      storedSources.push(rawImage);
+      return `puzzle-images/fake-${storedSources.length}/source.jpg`;
+    },
+    async renderStep(round, revealedCount, { numbered }) {
+      renders.push({ roundId: round.id, revealedCount, numbered });
+      const url = `https://example.test/${round.id}/${revealedCount}/${numbered ? "numbered" : "plain"}`;
+      return { originalContentUrl: `${url}-full.jpg`, previewImageUrl: `${url}-preview.jpg` };
+    },
+  };
+}
+
+export function createFakePuzzlePreview(store: PuzzleImageStore = createFakePuzzleImageStore()) {
+  return new PuzzlePreviewService(store);
 }

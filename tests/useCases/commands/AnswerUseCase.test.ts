@@ -1,7 +1,9 @@
+import { textOf } from "../../../src/lineMessages.js";
 import { describe, expect, it } from "vitest";
 import { AnswerUseCase } from "../../../src/useCases/commands/AnswerUseCase.js";
 import { AnswerFlowService } from "../../../src/services/AnswerFlowService.js";
 import {
+  createFakePuzzlePreview,
   createFakeAnswerSessionRepository,
   createFakePlayerStatsRepository,
   createFakePuzzleRoundRepository,
@@ -48,8 +50,18 @@ function build(session: AnswerSession, roundOverride: PuzzleRound = round) {
   const puzzleRounds = createFakePuzzleRoundRepository([roundOverride]);
   const answerSessions = createFakeAnswerSessionRepository([session]);
   const playerStats = createFakePlayerStatsRepository();
-  const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
-  const useCase = new AnswerUseCase(puzzleRounds, answerSessions, answerFlow);
+  const answerFlow = new AnswerFlowService(
+    answerSessions,
+    puzzleRounds,
+    playerStats,
+    createFakeTransactor(),
+  );
+  const useCase = new AnswerUseCase(
+    puzzleRounds,
+    answerSessions,
+    answerFlow,
+    createFakePuzzlePreview(),
+  );
   return { useCase, puzzleRounds, answerSessions, playerStats };
 }
 
@@ -59,7 +71,7 @@ describe("AnswerUseCase", () => {
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "ab" });
 
-    expect(reply).toContain("正解です");
+    expect(textOf(reply)).toContain("正解です");
     expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: 1 }]);
   });
 
@@ -68,7 +80,7 @@ describe("AnswerUseCase", () => {
 
     const reply = await useCase.execute({ groupId: "g1", userId: "someone-else", args: "zz" });
 
-    expect(reply).toContain("あと1回回答できます");
+    expect(textOf(reply)).toContain("あと1回回答できます");
     const session = await answerSessions.getById("session-1");
     expect(session?.answererIds).toEqual(["u1", "someone-else"]);
   });
@@ -80,7 +92,7 @@ describe("AnswerUseCase", () => {
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u2", args: "ab" });
 
-    expect(reply).toContain("正解です");
+    expect(textOf(reply)).toContain("正解です");
     expect(playerStats.calls).toEqual([
       { groupId: "g1", userId: "u1", scoreDelta: 1 },
       { groupId: "g1", userId: "u2", scoreDelta: 1 },
@@ -94,14 +106,19 @@ describe("AnswerUseCase", () => {
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
 
-    expect(reply).toContain("あと1回回答できます");
+    expect(textOf(reply)).toContain("あと1回回答できます");
     const session = await answerSessions.getById("session-1");
     expect(session?.currentStepAttempts).toBe(1);
     expect(session?.revealedCount).toBe(1);
   });
 
   it("advances the reveal once the per-block attempt limit is hit, with blocks remaining", async () => {
-    const threeCharRound: PuzzleRound = { ...round, sourceText: "abc", totalHideCount: 3, hiddenPositions: [0, 1, 2] };
+    const threeCharRound: PuzzleRound = {
+      ...round,
+      sourceText: "abc",
+      totalHideCount: 3,
+      hiddenPositions: [0, 1, 2],
+    };
     const { useCase, answerSessions } = build(
       makeSession({ attemptsPerBlockLimit: 1, wrongAnswerLimit: 5 }),
       threeCharRound,
@@ -109,7 +126,7 @@ describe("AnswerUseCase", () => {
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
 
-    expect(reply).toContain("次を開示します");
+    expect(textOf(reply)).toContain("次を開示します");
     const session = await answerSessions.getById("session-1");
     expect(session?.revealedCount).toBe(2);
     expect(session?.currentStepAttempts).toBe(0);
@@ -123,7 +140,7 @@ describe("AnswerUseCase", () => {
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
 
-    expect(reply).toContain("全開示となりました");
+    expect(textOf(reply)).toContain("全開示となりました");
     const session = await answerSessions.getById("session-1");
     expect(session?.status).toBe("fully_revealed");
     expect(session?.wrongAnswerCount).toBe(1);
@@ -137,7 +154,7 @@ describe("AnswerUseCase", () => {
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
 
-    expect(reply).toContain("誤答上限");
+    expect(textOf(reply)).toContain("誤答上限");
     expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: -1 }]);
   });
 
@@ -147,11 +164,20 @@ describe("AnswerUseCase", () => {
     // Wrap the session repo so execute() only ever sees the stale snapshot
     // (wrongAnswerCount: 0) via getActiveByGroup, while the live store (mutated below,
     // simulating the other request's write) is what the transactional re-read sees.
-    const staleSnapshot = makeSession({ wrongAnswerCount: 0, wrongAnswerLimit: 5, attemptsPerBlockLimit: 5 });
+    const staleSnapshot = makeSession({
+      wrongAnswerCount: 0,
+      wrongAnswerLimit: 5,
+      attemptsPerBlockLimit: 5,
+    });
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const liveAnswerSessions = createFakeAnswerSessionRepository([staleSnapshot]);
     const playerStats = createFakePlayerStatsRepository();
-    const answerFlow = new AnswerFlowService(liveAnswerSessions, puzzleRounds, playerStats, createFakeTransactor());
+    const answerFlow = new AnswerFlowService(
+      liveAnswerSessions,
+      puzzleRounds,
+      playerStats,
+      createFakeTransactor(),
+    );
     const staleViewAnswerSessions: AnswerSessionRepository = {
       create: liveAnswerSessions.create.bind(liveAnswerSessions),
       getById: liveAnswerSessions.getById.bind(liveAnswerSessions),
@@ -162,13 +188,18 @@ describe("AnswerUseCase", () => {
         return staleSnapshot;
       },
     };
-    const useCase = new AnswerUseCase(puzzleRounds, staleViewAnswerSessions, answerFlow);
+    const useCase = new AnswerUseCase(
+      puzzleRounds,
+      staleViewAnswerSessions,
+      answerFlow,
+      createFakePuzzlePreview(),
+    );
 
     await liveAnswerSessions.update("session-1", { wrongAnswerCount: 3 });
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
 
-    expect(reply).toContain("誤答: 4/5");
+    expect(textOf(reply)).toContain("誤答: 4/5");
     expect((await liveAnswerSessions.getById("session-1"))?.wrongAnswerCount).toBe(4);
   });
 });
