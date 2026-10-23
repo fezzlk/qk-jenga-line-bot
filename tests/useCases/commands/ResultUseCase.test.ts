@@ -8,7 +8,7 @@ describe("ResultUseCase", () => {
     const stats = createFakePlayerStatsRepository();
     const useCase = new ResultUseCase(stats);
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u1" });
 
     expect(textOf(reply)).toContain("まだありません");
   });
@@ -18,7 +18,7 @@ describe("ResultUseCase", () => {
     await stats.recordResult("g1", "u1", -1);
     const useCase = new ResultUseCase(stats);
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u1" });
 
     expect(textOf(reply)).toContain("通算プレイ回数: 1回");
     expect(textOf(reply)).toContain("通算スコア: -1点");

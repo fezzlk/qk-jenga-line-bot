@@ -1,6 +1,6 @@
 import type { messagingApi } from "@line/bot-sdk";
-import { renderRevealedText } from "../domain/services/textPuzzle.js";
-import { requireReadyImageRound } from "../domain/services/imagePuzzle.js";
+import { renderNumberedText, renderRevealedText } from "../domain/services/textPuzzle.js";
+import { requireReadyRound } from "../domain/services/puzzleRound.js";
 import { imageMessage, textMessage } from "../lineMessages.js";
 import type { PuzzleImageStore } from "./PuzzleImageService.js";
 import type { PuzzleRound } from "../types.js";
@@ -18,10 +18,10 @@ export type PreviewText = {
 
 /**
  * Builds a reply that shows the puzzle at a given reveal step, so use cases don't branch
- * on sourceType. Text rounds keep the original single-message format
- * ("<before>\n<label>: <text>\n<after>"); image rounds send the masked image as its own
- * message between the surrounding text. The creation view numbers the visible cells so
- * creators can pick one to hide; the challenge view does not.
+ * on sourceType. Text rounds are a single text message; image rounds send the masked
+ * image as its own message between the surrounding text. The creation view numbers
+ * every position (characters or cells) so the hider can pick one; the challenge view
+ * does not.
  */
 export class PuzzlePreviewService {
   constructor(private readonly puzzleImages: PuzzleImageStore) {}
@@ -32,13 +32,19 @@ export class PuzzlePreviewService {
     view: PreviewView,
     { before, label, after }: PreviewText,
   ): Promise<messagingApi.Message[]> {
-    if (round.sourceType === "text") {
-      const state = `${label}: ${renderRevealedText(round.sourceText, round.hiddenPositions, revealedCount)}`;
+    const ready = requireReadyRound(round);
+    if (ready.sourceType === "text") {
+      const text =
+        view === "creation"
+          ? renderNumberedText(ready.sourceText, ready.hiddenPositions)
+          : renderRevealedText(ready.sourceText, ready.hiddenPositions, revealedCount);
+      // The numbered view spans several lines, so it starts on its own line.
+      const state = view === "creation" ? `${label}:\n${text}` : `${label}: ${text}`;
       return [textMessage([before, state, after].filter(Boolean).join("\n"))];
     }
 
     const { originalContentUrl, previewImageUrl } = await this.puzzleImages.renderStep(
-      requireReadyImageRound(round),
+      ready,
       revealedCount,
       { numbered: view === "creation" },
     );

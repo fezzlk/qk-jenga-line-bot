@@ -15,7 +15,8 @@ import { AnswerUseCase } from "./useCases/commands/AnswerUseCase.js";
 import { SkipUseCase } from "./useCases/commands/SkipUseCase.js";
 import { ChallengeStatusUseCase } from "./useCases/commands/ChallengeStatusUseCase.js";
 import { ResultUseCase } from "./useCases/commands/ResultUseCase.js";
-import { ImageRoundSetupUseCase } from "./useCases/ImageRoundSetupUseCase.js";
+import { RoundSetupUseCase } from "./useCases/RoundSetupUseCase.js";
+import { RecruitUseCase } from "./useCases/RecruitUseCase.js";
 import { HandleLineEventUseCase } from "./useCases/HandleLineEventUseCase.js";
 
 export function buildHandleLineEventUseCase(): HandleLineEventUseCase {
@@ -28,18 +29,21 @@ export function buildHandleLineEventUseCase(): HandleLineEventUseCase {
   const puzzleImages = new PuzzleImageService(new ImageStorageService());
   const puzzlePreview = new PuzzlePreviewService(puzzleImages);
 
-  return new HandleLineEventUseCase(
-    {
+  return new HandleLineEventUseCase({
+    commands: {
       問題作成開始: new StartCreationUseCase(puzzleRounds),
-      隠す: new HideUseCase(puzzleRounds, transactor, puzzlePreview),
       作成状況: new CreationStatusUseCase(puzzleRounds, puzzlePreview),
       挑戦開始: new StartChallengeUseCase(puzzleRounds, answerSessions, answerFlow, puzzlePreview),
-      回答: new AnswerUseCase(puzzleRounds, answerSessions, answerFlow, puzzlePreview),
       スキップ: new SkipUseCase(puzzleRounds, answerSessions, answerFlow, puzzlePreview),
       挑戦状況: new ChallengeStatusUseCase(puzzleRounds, answerSessions, puzzlePreview),
       結果: new ResultUseCase(playerStats),
     },
-    new ImageRoundSetupUseCase(puzzleRounds, puzzleImages, puzzlePreview, lineMessaging),
+    roundSetup: new RoundSetupUseCase(puzzleRounds, puzzleImages, lineMessaging),
+    recruit: new RecruitUseCase(puzzleRounds, transactor, puzzlePreview, lineMessaging),
+    hide: new HideUseCase(puzzleRounds, transactor, puzzlePreview),
+    answer: new AnswerUseCase(puzzleRounds, answerSessions, answerFlow, puzzlePreview, transactor),
+    puzzleRounds,
+    answerSessions,
     lineMessaging,
-  );
+  });
 }

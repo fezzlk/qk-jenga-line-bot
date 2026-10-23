@@ -2,7 +2,8 @@ import type { messagingApi } from "@line/bot-sdk";
 import { PuzzleRoundRepository } from "../../repositories/PuzzleRoundRepository.js";
 import { AnswerSessionRepository } from "../../repositories/AnswerSessionRepository.js";
 import { PuzzlePreviewService } from "../../services/PuzzlePreviewService.js";
-import { textMessage } from "../../lineMessages.js";
+import { textMessage, withButtonsOnLast } from "../../lineMessages.js";
+import { answerButtons } from "../buttons.js";
 import type { CommandInput, CommandUseCase } from "../commandTypes.js";
 
 export class ChallengeStatusUseCase implements CommandUseCase {
@@ -21,11 +22,12 @@ export class ChallengeStatusUseCase implements CommandUseCase {
     if (!round) {
       throw new Error(`PuzzleRound not found for active session: ${session.puzzleRoundId}`);
     }
-    return this.puzzlePreview.compose(round, session.revealedCount, "challenge", {
+    const messages = await this.puzzlePreview.compose(round, session.revealedCount, "challenge", {
       label: "現在の状態",
       after:
         `誤答: ${session.wrongAnswerCount}/${session.wrongAnswerLimit}　` +
         `この位置での回答: ${session.currentStepAttempts}/${session.attemptsPerBlockLimit}`,
     });
+    return withButtonsOnLast(messages, answerButtons(session.id));
   }
 }

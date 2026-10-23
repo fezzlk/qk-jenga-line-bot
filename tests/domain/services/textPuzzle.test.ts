@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isFullyRevealed, renderRevealedText } from "../../../src/domain/services/textPuzzle.js";
+import {
+  isFullyRevealed,
+  renderNumberedText,
+  renderRevealedText,
+} from "../../../src/domain/services/textPuzzle.js";
 
 describe("renderRevealedText", () => {
   it("keeps characters never hidden always visible", () => {
@@ -24,5 +28,17 @@ describe("isFullyRevealed", () => {
     expect(isFullyRevealed([0, 1, 2], 2)).toBe(false);
     expect(isFullyRevealed([0, 1, 2], 3)).toBe(true);
     expect(isFullyRevealed([0, 1, 2], 4)).toBe(true);
+  });
+});
+
+describe("renderNumberedText", () => {
+  it("numbers every character five per line and masks hidden ones", () => {
+    expect(renderNumberedText("石の上にも三年", [2, 6])).toBe(
+      "1:石 2:の 3:＿ 4:に 5:も\n6:三 7:＿",
+    );
+  });
+
+  it("handles a short text on a single line", () => {
+    expect(renderNumberedText("一石二鳥", [])).toBe("1:一 2:石 3:二 4:鳥");
   });
 });

@@ -3,7 +3,10 @@ import { PuzzleRoundRepository } from "../../repositories/PuzzleRoundRepository.
 import { AnswerSessionRepository } from "../../repositories/AnswerSessionRepository.js";
 import { AnswerFlowService } from "../../services/AnswerFlowService.js";
 import { PuzzlePreviewService } from "../../services/PuzzlePreviewService.js";
-import { textMessage } from "../../lineMessages.js";
+import { textMessage, withButtonsOnLast } from "../../lineMessages.js";
+import type { AnswerSession } from "../../types.js";
+import { answerButtons } from "../buttons.js";
+import { formatScore, STALE_BUTTON_REPLY } from "../replies.js";
 import type { CommandInput, CommandUseCase } from "../commandTypes.js";
 
 export class SkipUseCase implements CommandUseCase {
@@ -14,11 +17,26 @@ export class SkipUseCase implements CommandUseCase {
     private readonly puzzlePreview: PuzzlePreviewService,
   ) {}
 
+  /** The スキップ button, tied to the session it was shown for. */
+  async skip(groupId: string, userId: string, sessionId: string): Promise<messagingApi.Message[]> {
+    const session = await this.answerSessions.getActiveByGroup(groupId);
+    if (!session || session.id !== sessionId) return [textMessage(STALE_BUTTON_REPLY)];
+    return this.skipSession(session, userId);
+  }
+
+  /** Typed スキップ (no arguments), applied to the group's current session. */
   async execute({ groupId, userId }: CommandInput): Promise<messagingApi.Message[]> {
     const session = await this.answerSessions.getActiveByGroup(groupId);
     if (!session) {
       return [textMessage("進行中の挑戦がありません。「挑戦開始」で始めてください。")];
     }
+    return this.skipSession(session, userId);
+  }
+
+  private async skipSession(
+    session: AnswerSession,
+    userId: string,
+  ): Promise<messagingApi.Message[]> {
     const round = await this.puzzleRounds.getById(session.puzzleRoundId);
     if (!round) {
       throw new Error(`PuzzleRound not found for active session: ${session.puzzleRoundId}`);
@@ -33,13 +51,16 @@ export class SkipUseCase implements CommandUseCase {
       return this.puzzlePreview.compose(round, result.session.revealedCount, "challenge", {
         before: "スキップしました。全開示となりました。",
         label: "最終状態",
-        after: `結果: アウト（${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`,
+        after: `結果: アウト（${formatScore(result.score)}、記録済み）`,
       });
     }
 
-    return this.puzzlePreview.compose(round, result.session.revealedCount, "challenge", {
-      before: "スキップしました。",
-      label: "現在の状態",
-    });
+    const messages = await this.puzzlePreview.compose(
+      round,
+      result.session.revealedCount,
+      "challenge",
+      { before: "スキップしました。", label: "現在の状態" },
+    );
+    return withButtonsOnLast(messages, answerButtons(session.id));
   }
 }

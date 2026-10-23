@@ -19,7 +19,10 @@ const round: PuzzleRound = {
   sourceText: "ab",
   totalHideCount: 2,
   participantIds: [],
-  lastHiderId: null,
+  creatorId: "creator",
+  participantNames: {},
+  turnIndex: 0,
+  pendingInput: null,
   hiddenPositions: [0, 1],
   phase: "in_challenge",
   createdAt: 0,
@@ -51,6 +54,7 @@ describe("SkipUseCase", () => {
       puzzleRoundId: "round-1",
       groupId: "g1",
       answererIds: ["u1"],
+      answerModeUserIds: [],
       revealedCount: 0,
       wrongAnswerCount: 0,
       currentStepAttempts: 0,
@@ -65,7 +69,7 @@ describe("SkipUseCase", () => {
     };
     const { useCase, answerSessions, playerStats } = build(session);
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u1" });
 
     expect(textOf(reply)).toContain("スキップしました");
     expect((await answerSessions.getById("session-1"))?.revealedCount).toBe(1);
@@ -78,6 +82,7 @@ describe("SkipUseCase", () => {
       puzzleRoundId: "round-1",
       groupId: "g1",
       answererIds: ["u1"],
+      answerModeUserIds: [],
       revealedCount: 0,
       wrongAnswerCount: 0,
       currentStepAttempts: 0,
@@ -92,7 +97,7 @@ describe("SkipUseCase", () => {
     };
     const { useCase, answerSessions } = build(session);
 
-    await useCase.execute({ groupId: "g1", userId: "someone-else", args: "" });
+    await useCase.execute({ groupId: "g1", userId: "someone-else" });
 
     expect((await answerSessions.getById("session-1"))?.answererIds).toEqual([
       "u1",
@@ -106,6 +111,7 @@ describe("SkipUseCase", () => {
       puzzleRoundId: "round-1",
       groupId: "g1",
       answererIds: ["u1", "u2"],
+      answerModeUserIds: [],
       revealedCount: 1,
       wrongAnswerCount: 0,
       currentStepAttempts: 0,
@@ -120,7 +126,7 @@ describe("SkipUseCase", () => {
     };
     const { useCase, playerStats } = build(session);
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u2", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u2" });
 
     expect(textOf(reply)).toContain("全開示となりました");
     expect(playerStats.calls).toEqual([
@@ -140,6 +146,7 @@ describe("SkipUseCase", () => {
       puzzleRoundId: "round-1",
       groupId: "g1",
       answererIds: ["u1"],
+      answerModeUserIds: [],
       revealedCount: 0,
       wrongAnswerCount: 0,
       currentStepAttempts: 0,
@@ -181,7 +188,7 @@ describe("SkipUseCase", () => {
     // A concurrent skip already revealed the first (of two) blocks.
     await liveAnswerSessions.update("session-1", { revealedCount: 1 });
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u1" });
 
     expect(textOf(reply)).toContain("全開示となりました");
     expect((await liveAnswerSessions.getById("session-1"))?.revealedCount).toBe(2);

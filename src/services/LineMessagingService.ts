@@ -25,4 +25,24 @@ export class LineMessagingService {
     const stream = await this.blobClient.getMessageContent(messageId);
     return streamToBuffer(stream);
   }
+
+  /**
+   * The user's LINE display name, or null if it can't be fetched (e.g. they haven't
+   * added the bot as a friend in a 1:1 chat). groupId is a group ID ("C…"), a room ID
+   * ("R…") or "user:<userId>" for 1:1 chats, as built by HandleLineEventUseCase.
+   */
+  async getDisplayName(groupId: string, userId: string): Promise<string | null> {
+    try {
+      if (groupId.startsWith("user:")) {
+        return (await this.client.getProfile(userId)).displayName;
+      }
+      if (groupId.startsWith("R")) {
+        return (await this.client.getRoomMemberProfile(groupId, userId)).displayName;
+      }
+      return (await this.client.getGroupMemberProfile(groupId, userId)).displayName;
+    } catch (error) {
+      console.warn("Failed to fetch LINE display name", error);
+      return null;
+    }
+  }
 }

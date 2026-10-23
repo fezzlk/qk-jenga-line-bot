@@ -3,7 +3,9 @@ import { PuzzleRoundRepository } from "../../repositories/PuzzleRoundRepository.
 import { AnswerSessionRepository } from "../../repositories/AnswerSessionRepository.js";
 import { AnswerFlowService } from "../../services/AnswerFlowService.js";
 import { PuzzlePreviewService } from "../../services/PuzzlePreviewService.js";
-import { textMessage } from "../../lineMessages.js";
+import { textMessage, withButtonsOnLast } from "../../lineMessages.js";
+import { answerButtons } from "../buttons.js";
+import { formatScore } from "../replies.js";
 import {
   DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT,
   DEFAULT_SCORE_CORRECT,
@@ -33,6 +35,7 @@ export class StartChallengeUseCase implements CommandUseCase {
       puzzleRoundId: round.id,
       groupId,
       answererIds: [userId],
+      answerModeUserIds: [],
       revealedCount: 0,
       wrongAnswerCount: 0,
       currentStepAttempts: 0,
@@ -54,16 +57,22 @@ export class StartChallengeUseCase implements CommandUseCase {
       return this.puzzlePreview.compose(round, revealed.session.revealedCount, "challenge", {
         before: "挑戦を開始しましたが、1箇所しかない問題だったため即座に全開示となりました。",
         label: "最終状態",
-        after: `結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`,
+        after: `結果: アウト（${formatScore(score)}、記録済み）`,
       });
     }
 
-    return this.puzzlePreview.compose(round, revealed.session.revealedCount, "challenge", {
-      before: "挑戦を開始しました。",
-      label: "現在の状態",
-      after:
-        "「回答 <内容>」または「スキップ」を送ってください。\n" +
-        `誤答上限: ${DEFAULT_WRONG_ANSWER_LIMIT}回 / 1箇所での回答上限: ${DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT}回`,
-    });
+    const messages = await this.puzzlePreview.compose(
+      round,
+      revealed.session.revealedCount,
+      "challenge",
+      {
+        before: "挑戦を開始しました。",
+        label: "現在の状態",
+        after:
+          "答えが分かったら「回答する」、次を見たければ「スキップ」を押してください。\n" +
+          `誤答上限: ${DEFAULT_WRONG_ANSWER_LIMIT}回 / 1箇所での回答上限: ${DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT}回`,
+      },
+    );
+    return withButtonsOnLast(messages, answerButtons(session.id));
   }
 }
