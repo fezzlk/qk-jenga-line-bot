@@ -65,6 +65,10 @@ export class AnswerUseCase {
     // to build the reply message below.
     const result = await this.answerFlow.submitAnswer(session.id, round, userId, answerText);
 
+    if (result.outcome === "already_ended") {
+      return [textMessage("この挑戦は既に終了しています。")];
+    }
+
     if (result.outcome === "correct") {
       // The image itself isn't the answer text, so image rounds also spell it out.
       const answerLine = round.sourceType === "image" ? `正解: ${correctAnswerOf(round)}\n` : "";

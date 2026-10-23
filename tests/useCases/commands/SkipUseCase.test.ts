@@ -193,4 +193,35 @@ describe("SkipUseCase", () => {
     expect(textOf(reply)).toContain("全開示となりました");
     expect((await liveAnswerSessions.getById("session-1"))?.revealedCount).toBe(2);
   });
+
+  it("replies that the challenge is over, without scoring, if it ended concurrently (FEZ-224)", async () => {
+    const snapshot: AnswerSession = {
+      id: "session-1",
+      puzzleRoundId: "round-1",
+      groupId: "g1",
+      answererIds: ["u1"],
+      answerModeUserIds: [],
+      revealedCount: 0,
+      wrongAnswerCount: 0,
+      currentStepAttempts: 0,
+      wrongAnswerLimit: 3,
+      attemptsPerBlockLimit: 1,
+      scoreCorrect: 1,
+      scoreWrongLimit: -1,
+      scoreFullyRevealed: 0,
+      status: "active",
+      startedAt: 0,
+      endedAt: null,
+    };
+    const { useCase, answerSessions, playerStats } = build(snapshot);
+    // Keep returning the stale active snapshot to the lookup, as a request racing with
+    // the one that ended the session would see.
+    answerSessions.getActiveByGroup = async () => snapshot;
+    await answerSessions.update(snapshot.id, { status: "correct" });
+
+    const reply = await useCase.execute({ groupId: "g1", userId: "u1" });
+
+    expect(textOf(reply)).toBe("この挑戦は既に終了しています。");
+    expect(playerStats.calls).toEqual([]);
+  });
 });

@@ -12,12 +12,14 @@ export type AnswerSubmitOutcome =
   | { outcome: "wrong_limit"; session: AnswerSession; score: number }
   | { outcome: "fully_revealed"; session: AnswerSession; score: number }
   | { outcome: "continue_revealed"; session: AnswerSession }
-  | { outcome: "continue"; session: AnswerSession };
+  | { outcome: "continue"; session: AnswerSession }
+  | { outcome: "already_ended"; session: AnswerSession };
 
 /** Result of AnswerFlowService.submitSkip, discriminated on how the skip landed. */
 export type SkipSubmitOutcome =
   | { outcome: "fully_revealed"; session: AnswerSession; score: number }
-  | { outcome: "continue"; session: AnswerSession };
+  | { outcome: "continue"; session: AnswerSession }
+  | { outcome: "already_ended"; session: AnswerSession };
 
 /**
  * Shared write-path for the answer phase: revealing the next block and ending a
@@ -94,6 +96,12 @@ export class AnswerFlowService {
       if (!session) {
         throw new Error(`AnswerSession not found: ${sessionId}`);
       }
+      // A concurrent submitAnswer/submitSkip may have already ended this session
+      // inside its own transaction between this caller's getActiveByGroup lookup
+      // and this re-read; ending it again here would double-record score (FEZ-224).
+      if (session.status !== "active") {
+        return { outcome: "already_ended", session };
+      }
       const answererIds = session.answererIds.includes(userId)
         ? session.answererIds
         : [...session.answererIds, userId];
@@ -167,6 +175,11 @@ export class AnswerFlowService {
       const session = await this.answerSessions.getByIdInTransaction(txn, sessionId);
       if (!session) {
         throw new Error(`AnswerSession not found: ${sessionId}`);
+      }
+      // See submitAnswer's identical guard: a concurrent request may have already
+      // ended this session inside its own transaction (FEZ-224).
+      if (session.status !== "active") {
+        return { outcome: "already_ended", session };
       }
       const answererIds = session.answererIds.includes(userId)
         ? session.answererIds
