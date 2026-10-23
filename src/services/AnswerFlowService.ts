@@ -3,11 +3,8 @@ import { PuzzleRoundRepository } from "../repositories/PuzzleRoundRepository.js"
 import { PlayerStatsRepository } from "../repositories/PlayerStatsRepository.js";
 import type { Transactor } from "../repositories/Transactor.js";
 import { isFullyRevealed } from "../domain/services/textPuzzle.js";
-import {
-  type AnswerSession,
-  type AnswerSessionStatus,
-  type PuzzleRound,
-} from "../types.js";
+import { correctAnswerOf } from "../domain/services/puzzleRound.js";
+import { type AnswerSession, type AnswerSessionStatus, type PuzzleRound } from "../types.js";
 
 /** Result of AnswerFlowService.submitAnswer, discriminated on how the attempt landed. */
 export type AnswerSubmitOutcome =
@@ -77,7 +74,9 @@ export class AnswerFlowService {
     status: Exclude<AnswerSessionStatus, "active">,
     extraPatch: Partial<AnswerSession> = {},
   ): Promise<{ session: AnswerSession; score: number }> {
-    return this.transactor.run(async (txn) => this.applyEndSession(txn, session, round, status, extraPatch));
+    return this.transactor.run(async (txn) =>
+      this.applyEndSession(txn, session, round, status, extraPatch),
+    );
   }
 
   /**
@@ -106,9 +105,14 @@ export class AnswerFlowService {
       const answererIds = session.answererIds.includes(userId)
         ? session.answererIds
         : [...session.answererIds, userId];
+      // The answer consumes this user's 回答する; others waiting to answer stay waiting.
+      const answerModeUserIds = session.answerModeUserIds.filter((id) => id !== userId);
 
-      if (answerText === round.sourceText) {
-        const { session: ended, score } = this.applyEndSession(txn, session, round, "correct", { answererIds });
+      if (answerText === correctAnswerOf(round)) {
+        const { session: ended, score } = this.applyEndSession(txn, session, round, "correct", {
+          answererIds,
+          answerModeUserIds,
+        });
         return { outcome: "correct", session: ended, score };
       }
 
@@ -117,6 +121,7 @@ export class AnswerFlowService {
         const { session: ended, score } = this.applyEndSession(txn, session, round, "wrong_limit", {
           wrongAnswerCount,
           answererIds,
+          answerModeUserIds,
         });
         return { outcome: "wrong_limit", session: ended, score };
       }
@@ -125,20 +130,33 @@ export class AnswerFlowService {
       if (currentStepAttempts >= session.attemptsPerBlockLimit) {
         const revealedCount = session.revealedCount + 1;
         if (isFullyRevealed(round.hiddenPositions, revealedCount)) {
-          const { session: ended, score } = this.applyEndSession(txn, session, round, "fully_revealed", {
-            wrongAnswerCount,
-            answererIds,
-            revealedCount,
-            currentStepAttempts: 0,
-          });
+          const { session: ended, score } = this.applyEndSession(
+            txn,
+            session,
+            round,
+            "fully_revealed",
+            {
+              wrongAnswerCount,
+              answererIds,
+              answerModeUserIds,
+              revealedCount,
+              currentStepAttempts: 0,
+            },
+          );
           return { outcome: "fully_revealed", session: ended, score };
         }
-        const patch = { wrongAnswerCount, answererIds, revealedCount, currentStepAttempts: 0 };
+        const patch = {
+          wrongAnswerCount,
+          answererIds,
+          answerModeUserIds,
+          revealedCount,
+          currentStepAttempts: 0,
+        };
         this.answerSessions.updateInTransaction(txn, session.id, patch);
         return { outcome: "continue_revealed", session: { ...session, ...patch } };
       }
 
-      const patch = { wrongAnswerCount, currentStepAttempts, answererIds };
+      const patch = { wrongAnswerCount, currentStepAttempts, answererIds, answerModeUserIds };
       this.answerSessions.updateInTransaction(txn, session.id, patch);
       return { outcome: "continue", session: { ...session, ...patch } };
     });
@@ -148,7 +166,11 @@ export class AnswerFlowService {
    * Transaction-safe write-path for SkipUseCase: same re-read pattern as submitAnswer,
    * for fully_revealed / continue.
    */
-  async submitSkip(sessionId: string, round: PuzzleRound, userId: string): Promise<SkipSubmitOutcome> {
+  async submitSkip(
+    sessionId: string,
+    round: PuzzleRound,
+    userId: string,
+  ): Promise<SkipSubmitOutcome> {
     return this.transactor.run(async (txn) => {
       const session = await this.answerSessions.getByIdInTransaction(txn, sessionId);
       if (!session) {
@@ -165,11 +187,17 @@ export class AnswerFlowService {
 
       const revealedCount = session.revealedCount + 1;
       if (isFullyRevealed(round.hiddenPositions, revealedCount)) {
-        const { session: ended, score } = this.applyEndSession(txn, session, round, "fully_revealed", {
-          answererIds,
-          revealedCount,
-          currentStepAttempts: 0,
-        });
+        const { session: ended, score } = this.applyEndSession(
+          txn,
+          session,
+          round,
+          "fully_revealed",
+          {
+            answererIds,
+            revealedCount,
+            currentStepAttempts: 0,
+          },
+        );
         return { outcome: "fully_revealed", session: ended, score };
       }
       const patch = { answererIds, revealedCount, currentStepAttempts: 0 };

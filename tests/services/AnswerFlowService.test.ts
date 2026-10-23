@@ -15,7 +15,10 @@ const round: PuzzleRound = {
   sourceText: "ab",
   totalHideCount: 2,
   participantIds: [],
-  lastHiderId: null,
+  creatorId: "creator",
+  participantNames: {},
+  turnIndex: 0,
+  pendingInput: null,
   hiddenPositions: [0, 1],
   phase: "in_challenge",
   createdAt: 0,
@@ -26,6 +29,7 @@ const session: AnswerSession = {
   puzzleRoundId: "round-1",
   groupId: "g1",
   answererIds: ["u1"],
+  answerModeUserIds: [],
   revealedCount: 0,
   wrongAnswerCount: 0,
   currentStepAttempts: 0,
@@ -44,7 +48,12 @@ describe("AnswerFlowService", () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const answerSessions = createFakeAnswerSessionRepository([session]);
     const playerStats = createFakePlayerStatsRepository();
-    const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+    const service = new AnswerFlowService(
+      answerSessions,
+      puzzleRounds,
+      playerStats,
+      createFakeTransactor(),
+    );
 
     const result = await service.revealNextBlock(session, round);
 
@@ -58,7 +67,12 @@ describe("AnswerFlowService", () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const answerSessions = createFakeAnswerSessionRepository([session]);
     const playerStats = createFakePlayerStatsRepository();
-    const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+    const service = new AnswerFlowService(
+      answerSessions,
+      puzzleRounds,
+      playerStats,
+      createFakeTransactor(),
+    );
 
     const result = await service.revealNextBlock({ ...session, revealedCount: 1 }, round);
 
@@ -73,9 +87,16 @@ describe("AnswerFlowService", () => {
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const answerSessions = createFakeAnswerSessionRepository([session]);
     const playerStats = createFakePlayerStatsRepository();
-    const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+    const service = new AnswerFlowService(
+      answerSessions,
+      puzzleRounds,
+      playerStats,
+      createFakeTransactor(),
+    );
 
-    const { score } = await service.endSession(session, round, "correct", { answererIds: ["u1", "u2"] });
+    const { score } = await service.endSession(session, round, "correct", {
+      answererIds: ["u1", "u2"],
+    });
 
     expect(score).toBe(1);
     expect(playerStats.calls).toEqual([
@@ -89,7 +110,12 @@ describe("AnswerFlowService", () => {
       const puzzleRounds = createFakePuzzleRoundRepository([round]);
       const answerSessions = createFakeAnswerSessionRepository([session]);
       const playerStats = createFakePlayerStatsRepository();
-      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+      const service = new AnswerFlowService(
+        answerSessions,
+        puzzleRounds,
+        playerStats,
+        createFakeTransactor(),
+      );
 
       // Simulates another request's write landing between this caller obtaining
       // session.id and submitAnswer's transactional re-read.
@@ -108,7 +134,12 @@ describe("AnswerFlowService", () => {
       const puzzleRounds = createFakePuzzleRoundRepository([round]);
       const answerSessions = createFakeAnswerSessionRepository([session]);
       const playerStats = createFakePlayerStatsRepository();
-      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+      const service = new AnswerFlowService(
+        answerSessions,
+        puzzleRounds,
+        playerStats,
+        createFakeTransactor(),
+      );
 
       const result = await service.submitAnswer(session.id, round, "u1", "ab");
 
@@ -127,7 +158,12 @@ describe("AnswerFlowService", () => {
         { ...session, wrongAnswerCount: 2, wrongAnswerLimit: 3 },
       ]);
       const playerStats = createFakePlayerStatsRepository();
-      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+      const service = new AnswerFlowService(
+        answerSessions,
+        puzzleRounds,
+        playerStats,
+        createFakeTransactor(),
+      );
 
       const result = await service.submitAnswer(session.id, round, "u1", "zz");
 
@@ -143,7 +179,12 @@ describe("AnswerFlowService", () => {
         { ...session, revealedCount: 1, attemptsPerBlockLimit: 1 },
       ]);
       const playerStats = createFakePlayerStatsRepository();
-      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+      const service = new AnswerFlowService(
+        answerSessions,
+        puzzleRounds,
+        playerStats,
+        createFakeTransactor(),
+      );
 
       const result = await service.submitAnswer(session.id, round, "u1", "zz");
 
@@ -165,7 +206,12 @@ describe("AnswerFlowService", () => {
         { ...session, attemptsPerBlockLimit: 1, wrongAnswerLimit: 5 },
       ]);
       const playerStats = createFakePlayerStatsRepository();
-      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+      const service = new AnswerFlowService(
+        answerSessions,
+        puzzleRounds,
+        playerStats,
+        createFakeTransactor(),
+      );
 
       const result = await service.submitAnswer(session.id, threeCharRound, "u1", "zz");
 
@@ -178,9 +224,16 @@ describe("AnswerFlowService", () => {
 
     it("continues without revealing when under the per-block attempt limit", async () => {
       const puzzleRounds = createFakePuzzleRoundRepository([round]);
-      const answerSessions = createFakeAnswerSessionRepository([{ ...session, attemptsPerBlockLimit: 2 }]);
+      const answerSessions = createFakeAnswerSessionRepository([
+        { ...session, attemptsPerBlockLimit: 2 },
+      ]);
       const playerStats = createFakePlayerStatsRepository();
-      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+      const service = new AnswerFlowService(
+        answerSessions,
+        puzzleRounds,
+        playerStats,
+        createFakeTransactor(),
+      );
 
       const result = await service.submitAnswer(session.id, round, "u1", "zz");
 
@@ -214,7 +267,12 @@ describe("AnswerFlowService", () => {
       const puzzleRounds = createFakePuzzleRoundRepository([round]);
       const answerSessions = createFakeAnswerSessionRepository([session]);
       const playerStats = createFakePlayerStatsRepository();
-      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+      const service = new AnswerFlowService(
+        answerSessions,
+        puzzleRounds,
+        playerStats,
+        createFakeTransactor(),
+      );
 
       // Simulates a concurrent skip already having revealed the first (of two) blocks.
       await answerSessions.update(session.id, { revealedCount: 1 });
@@ -232,7 +290,12 @@ describe("AnswerFlowService", () => {
       const puzzleRounds = createFakePuzzleRoundRepository([round]);
       const answerSessions = createFakeAnswerSessionRepository([session]);
       const playerStats = createFakePlayerStatsRepository();
-      const service = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
+      const service = new AnswerFlowService(
+        answerSessions,
+        puzzleRounds,
+        playerStats,
+        createFakeTransactor(),
+      );
 
       const result = await service.submitSkip(session.id, round, "u2");
 

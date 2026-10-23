@@ -1,25 +1,43 @@
 import { getDb } from "../config/firebase.js";
-import { ACTIVE_PUZZLE_ROUND_PHASES, type PuzzleRound, type PuzzleRoundPhase } from "../types.js";
+import {
+  ACTIVE_PUZZLE_ROUND_PHASES,
+  type NewPuzzleRound,
+  type PuzzleRound,
+  type PuzzleRoundPatch,
+  type PuzzleRoundPhase,
+} from "../types.js";
 
 const COLLECTION = "puzzleRounds";
 
+// Fields added after the first deploy fall back to defaults, so older documents still load.
 function toEntity(id: string, data: FirebaseFirestore.DocumentData): PuzzleRound {
-  return {
+  const common = {
     id,
     groupId: data.groupId,
-    sourceType: data.sourceType,
-    sourceText: data.sourceText,
+    creatorId: data.creatorId ?? "",
     totalHideCount: data.totalHideCount,
-    participantIds: data.participantIds,
-    lastHiderId: data.lastHiderId,
+    participantIds: data.participantIds ?? [],
+    participantNames: data.participantNames ?? {},
+    turnIndex: data.turnIndex ?? 0,
+    pendingInput: data.pendingInput ?? null,
     hiddenPositions: data.hiddenPositions,
     phase: data.phase,
     createdAt: data.createdAt,
   };
+  if (data.sourceType === "image") {
+    return {
+      ...common,
+      sourceType: "image",
+      sourceImagePath: data.sourceImagePath ?? null,
+      gridSize: data.gridSize ?? null,
+      answerText: data.answerText ?? null,
+    };
+  }
+  return { ...common, sourceType: "text", sourceText: data.sourceText ?? null };
 }
 
 export class PuzzleRoundRepository {
-  async create(round: Omit<PuzzleRound, "id">): Promise<PuzzleRound> {
+  async create(round: NewPuzzleRound): Promise<PuzzleRound> {
     const ref = await getDb().collection(COLLECTION).add(round);
     return { ...round, id: ref.id };
   }
@@ -51,7 +69,7 @@ export class PuzzleRoundRepository {
     return null;
   }
 
-  async update(id: string, patch: Partial<Omit<PuzzleRound, "id">>): Promise<void> {
+  async update(id: string, patch: PuzzleRoundPatch): Promise<void> {
     await getDb().collection(COLLECTION).doc(id).update(patch);
   }
 
@@ -69,7 +87,7 @@ export class PuzzleRoundRepository {
   updateInTransaction(
     txn: FirebaseFirestore.Transaction,
     id: string,
-    patch: Partial<Omit<PuzzleRound, "id">>,
+    patch: PuzzleRoundPatch,
   ): void {
     txn.update(getDb().collection(COLLECTION).doc(id), patch);
   }

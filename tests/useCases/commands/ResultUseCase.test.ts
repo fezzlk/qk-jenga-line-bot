@@ -1,3 +1,4 @@
+import { textOf } from "../../../src/lineMessages.js";
 import { describe, expect, it } from "vitest";
 import { ResultUseCase } from "../../../src/useCases/commands/ResultUseCase.js";
 import { createFakePlayerStatsRepository } from "../../testUtils/fakeRepositories.js";
@@ -7,9 +8,9 @@ describe("ResultUseCase", () => {
     const stats = createFakePlayerStatsRepository();
     const useCase = new ResultUseCase(stats);
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u1" });
 
-    expect(reply).toContain("まだありません");
+    expect(textOf(reply)).toContain("まだありません");
   });
 
   it("reports totals after a recorded result", async () => {
@@ -17,9 +18,9 @@ describe("ResultUseCase", () => {
     await stats.recordResult("g1", "u1", -1);
     const useCase = new ResultUseCase(stats);
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "" });
+    const reply = await useCase.execute({ groupId: "g1", userId: "u1" });
 
-    expect(reply).toContain("通算プレイ回数: 1回");
-    expect(reply).toContain("通算スコア: -1点");
+    expect(textOf(reply)).toContain("通算プレイ回数: 1回");
+    expect(textOf(reply)).toContain("通算スコア: -1点");
   });
 });

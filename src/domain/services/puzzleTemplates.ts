@@ -15,7 +15,3 @@ export const PUZZLE_TEMPLATES: PuzzleTemplate[] = [
 export function findTemplateById(id: string): PuzzleTemplate | undefined {
   return PUZZLE_TEMPLATES.find((t) => t.id === id);
 }
-
-export function listTemplatesText(): string {
-  return PUZZLE_TEMPLATES.map((t) => `${t.id}: ${t.label}`).join("\n");
-}

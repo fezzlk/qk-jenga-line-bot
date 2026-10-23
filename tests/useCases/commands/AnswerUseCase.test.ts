@@ -1,7 +1,9 @@
+import { textOf } from "../../../src/lineMessages.js";
 import { describe, expect, it } from "vitest";
 import { AnswerUseCase } from "../../../src/useCases/commands/AnswerUseCase.js";
 import { AnswerFlowService } from "../../../src/services/AnswerFlowService.js";
 import {
+  createFakePuzzlePreview,
   createFakeAnswerSessionRepository,
   createFakePlayerStatsRepository,
   createFakePuzzleRoundRepository,
@@ -17,7 +19,10 @@ const round: PuzzleRound = {
   sourceText: "ab",
   totalHideCount: 2,
   participantIds: [],
-  lastHiderId: null,
+  creatorId: "creator",
+  participantNames: {},
+  turnIndex: 0,
+  pendingInput: null,
   hiddenPositions: [0, 1],
   phase: "in_challenge",
   createdAt: 0,
@@ -29,6 +34,7 @@ function makeSession(overrides: Partial<AnswerSession> = {}): AnswerSession {
     puzzleRoundId: "round-1",
     groupId: "g1",
     answererIds: ["u1"],
+    answerModeUserIds: [],
     revealedCount: 1,
     wrongAnswerCount: 0,
     currentStepAttempts: 0,
@@ -48,39 +54,50 @@ function build(session: AnswerSession, roundOverride: PuzzleRound = round) {
   const puzzleRounds = createFakePuzzleRoundRepository([roundOverride]);
   const answerSessions = createFakeAnswerSessionRepository([session]);
   const playerStats = createFakePlayerStatsRepository();
-  const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
-  const useCase = new AnswerUseCase(puzzleRounds, answerSessions, answerFlow);
-  return { useCase, puzzleRounds, answerSessions, playerStats };
+  const answerFlow = new AnswerFlowService(
+    answerSessions,
+    puzzleRounds,
+    playerStats,
+    createFakeTransactor(),
+  );
+  const useCase = new AnswerUseCase(
+    puzzleRounds,
+    answerSessions,
+    answerFlow,
+    createFakePuzzlePreview(),
+    createFakeTransactor(),
+  );
+  return { useCase, puzzleRounds, answerSessions, playerStats, active: session };
 }
 
 describe("AnswerUseCase", () => {
   it("ends the session as correct and records +1 on a full match", async () => {
-    const { useCase, playerStats } = build(makeSession());
+    const { active, useCase, playerStats } = build(makeSession());
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "ab" });
+    const reply = await useCase.submitAnswer(active, "u1", "ab");
 
-    expect(reply).toContain("正解です");
+    expect(textOf(reply)).toContain("正解です");
     expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: 1 }]);
   });
 
   it("accepts an answer from a new participant (先着順) and joins them to the session", async () => {
-    const { useCase, answerSessions } = build(makeSession({ attemptsPerBlockLimit: 2 }));
+    const { active, useCase, answerSessions } = build(makeSession({ attemptsPerBlockLimit: 2 }));
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "someone-else", args: "zz" });
+    const reply = await useCase.submitAnswer(active, "someone-else", "zz");
 
-    expect(reply).toContain("あと1回回答できます");
+    expect(textOf(reply)).toContain("あと1回回答できます");
     const session = await answerSessions.getById("session-1");
     expect(session?.answererIds).toEqual(["u1", "someone-else"]);
   });
 
   it("records +1 for every participant, not just the one who typed the winning answer", async () => {
-    const { useCase, answerSessions, playerStats } = build(
+    const { active, useCase, answerSessions, playerStats } = build(
       makeSession({ answererIds: ["u1", "u2"] }),
     );
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u2", args: "ab" });
+    const reply = await useCase.submitAnswer(active, "u2", "ab");
 
-    expect(reply).toContain("正解です");
+    expect(textOf(reply)).toContain("正解です");
     expect(playerStats.calls).toEqual([
       { groupId: "g1", userId: "u1", scoreDelta: 1 },
       { groupId: "g1", userId: "u2", scoreDelta: 1 },
@@ -90,26 +107,31 @@ describe("AnswerUseCase", () => {
   });
 
   it("allows a retry when under the per-block attempt limit", async () => {
-    const { useCase, answerSessions } = build(makeSession({ attemptsPerBlockLimit: 2 }));
+    const { active, useCase, answerSessions } = build(makeSession({ attemptsPerBlockLimit: 2 }));
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
+    const reply = await useCase.submitAnswer(active, "u1", "zz");
 
-    expect(reply).toContain("あと1回回答できます");
+    expect(textOf(reply)).toContain("あと1回回答できます");
     const session = await answerSessions.getById("session-1");
     expect(session?.currentStepAttempts).toBe(1);
     expect(session?.revealedCount).toBe(1);
   });
 
   it("advances the reveal once the per-block attempt limit is hit, with blocks remaining", async () => {
-    const threeCharRound: PuzzleRound = { ...round, sourceText: "abc", totalHideCount: 3, hiddenPositions: [0, 1, 2] };
-    const { useCase, answerSessions } = build(
+    const threeCharRound: PuzzleRound = {
+      ...round,
+      sourceText: "abc",
+      totalHideCount: 3,
+      hiddenPositions: [0, 1, 2],
+    };
+    const { active, useCase, answerSessions } = build(
       makeSession({ attemptsPerBlockLimit: 1, wrongAnswerLimit: 5 }),
       threeCharRound,
     );
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
+    const reply = await useCase.submitAnswer(active, "u1", "zz");
 
-    expect(reply).toContain("次を開示します");
+    expect(textOf(reply)).toContain("次を開示します");
     const session = await answerSessions.getById("session-1");
     expect(session?.revealedCount).toBe(2);
     expect(session?.currentStepAttempts).toBe(0);
@@ -117,13 +139,13 @@ describe("AnswerUseCase", () => {
   });
 
   it("ends as fully_revealed and records 0 when the per-block limit is hit on the last block", async () => {
-    const { useCase, answerSessions, playerStats } = build(
+    const { active, useCase, answerSessions, playerStats } = build(
       makeSession({ attemptsPerBlockLimit: 1, wrongAnswerLimit: 5 }),
     );
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
+    const reply = await useCase.submitAnswer(active, "u1", "zz");
 
-    expect(reply).toContain("全開示となりました");
+    expect(textOf(reply)).toContain("全開示となりました");
     const session = await answerSessions.getById("session-1");
     expect(session?.status).toBe("fully_revealed");
     expect(session?.wrongAnswerCount).toBe(1);
@@ -131,27 +153,36 @@ describe("AnswerUseCase", () => {
   });
 
   it("ends the session and records -1 when the wrong-answer limit is reached", async () => {
-    const { useCase, playerStats } = build(
+    const { active, useCase, playerStats } = build(
       makeSession({ wrongAnswerCount: 1, wrongAnswerLimit: 2, attemptsPerBlockLimit: 5 }),
     );
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
+    const reply = await useCase.submitAnswer(active, "u1", "zz");
 
-    expect(reply).toContain("誤答上限");
+    expect(textOf(reply)).toContain("誤答上限");
     expect(playerStats.calls).toEqual([{ groupId: "g1", userId: "u1", scoreDelta: -1 }]);
   });
 
   it("builds counters from a fresh re-read, not the initial (possibly stale) lookup", async () => {
     // Mirrors two concurrent answerers: the use case's initial getActiveByGroup() may
     // already be outdated by the time AnswerFlowService.submitAnswer's transaction runs.
-    // Wrap the session repo so execute() only ever sees the stale snapshot
+    // The caller (HandleLineEventUseCase) only ever looked up the stale snapshot
     // (wrongAnswerCount: 0) via getActiveByGroup, while the live store (mutated below,
     // simulating the other request's write) is what the transactional re-read sees.
-    const staleSnapshot = makeSession({ wrongAnswerCount: 0, wrongAnswerLimit: 5, attemptsPerBlockLimit: 5 });
+    const staleSnapshot = makeSession({
+      wrongAnswerCount: 0,
+      wrongAnswerLimit: 5,
+      attemptsPerBlockLimit: 5,
+    });
     const puzzleRounds = createFakePuzzleRoundRepository([round]);
     const liveAnswerSessions = createFakeAnswerSessionRepository([staleSnapshot]);
     const playerStats = createFakePlayerStatsRepository();
-    const answerFlow = new AnswerFlowService(liveAnswerSessions, puzzleRounds, playerStats, createFakeTransactor());
+    const answerFlow = new AnswerFlowService(
+      liveAnswerSessions,
+      puzzleRounds,
+      playerStats,
+      createFakeTransactor(),
+    );
     const staleViewAnswerSessions: AnswerSessionRepository = {
       create: liveAnswerSessions.create.bind(liveAnswerSessions),
       getById: liveAnswerSessions.getById.bind(liveAnswerSessions),
@@ -162,13 +193,19 @@ describe("AnswerUseCase", () => {
         return staleSnapshot;
       },
     };
-    const useCase = new AnswerUseCase(puzzleRounds, staleViewAnswerSessions, answerFlow);
+    const useCase = new AnswerUseCase(
+      puzzleRounds,
+      staleViewAnswerSessions,
+      answerFlow,
+      createFakePuzzlePreview(),
+      createFakeTransactor(),
+    );
 
     await liveAnswerSessions.update("session-1", { wrongAnswerCount: 3 });
 
-    const reply = await useCase.execute({ groupId: "g1", userId: "u1", args: "zz" });
+    const reply = await useCase.submitAnswer(staleSnapshot, "u1", "zz");
 
-    expect(reply).toContain("誤答: 4/5");
+    expect(textOf(reply)).toContain("誤答: 4/5");
     expect((await liveAnswerSessions.getById("session-1"))?.wrongAnswerCount).toBe(4);
   });
 });

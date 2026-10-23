@@ -1,24 +1,56 @@
+import type { messagingApi } from "@line/bot-sdk";
 import { PuzzleRoundRepository } from "../../repositories/PuzzleRoundRepository.js";
 import { AnswerSessionRepository } from "../../repositories/AnswerSessionRepository.js";
+import type { Transactor } from "../../repositories/Transactor.js";
 import { AnswerFlowService } from "../../services/AnswerFlowService.js";
-import { renderRevealedText } from "../../domain/services/textPuzzle.js";
-import type { CommandInput, CommandUseCase } from "../commandTypes.js";
+import { PuzzlePreviewService } from "../../services/PuzzlePreviewService.js";
+import { correctAnswerOf } from "../../domain/services/puzzleRound.js";
+import { textMessage, withButtonsOnLast } from "../../lineMessages.js";
+import type { AnswerSession } from "../../types.js";
+import { answerButtons } from "../buttons.js";
+import { formatScore, STALE_BUTTON_REPLY } from "../replies.js";
 
-export class AnswerUseCase implements CommandUseCase {
+/**
+ * 回答する: tapping the button puts that user into answer mode; their next plain-text
+ * message is submitted as the answer (mode gate). Several users may be waiting at once.
+ */
+export class AnswerUseCase {
   constructor(
     private readonly puzzleRounds: PuzzleRoundRepository,
     private readonly answerSessions: AnswerSessionRepository,
     private readonly answerFlow: AnswerFlowService,
+    private readonly puzzlePreview: PuzzlePreviewService,
+    private readonly transactor: Transactor,
   ) {}
 
-  async execute({ groupId, userId, args }: CommandInput): Promise<string> {
+  async enterAnswerMode(
+    groupId: string,
+    userId: string,
+    sessionId: string,
+  ): Promise<messagingApi.Message[]> {
     const session = await this.answerSessions.getActiveByGroup(groupId);
-    if (!session) {
-      return "進行中の挑戦がありません。「挑戦開始」で始めてください。";
-    }
-    const answerText = args.trim();
+    if (!session || session.id !== sessionId) return [textMessage(STALE_BUTTON_REPLY)];
+
+    // In a transaction so simultaneous taps by different users don't drop one another.
+    await this.transactor.run(async (txn) => {
+      const latest = await this.answerSessions.getByIdInTransaction(txn, sessionId);
+      if (!latest || latest.answerModeUserIds.includes(userId)) return;
+      this.answerSessions.updateInTransaction(txn, sessionId, {
+        answerModeUserIds: [...latest.answerModeUserIds, userId],
+      });
+    });
+    return [textMessage("回答を送ってください。次に送ったメッセージが回答になります。")];
+  }
+
+  /** Mode-gate value: the answer text from a user who tapped 回答する. */
+  async submitAnswer(
+    session: AnswerSession,
+    userId: string,
+    text: string,
+  ): Promise<messagingApi.Message[]> {
+    const answerText = text.trim();
     if (!answerText) {
-      return "回答内容を「回答 <内容>」の形式で送ってください。";
+      return [textMessage("回答が空です。1文字以上で送ってください。")];
     }
 
     const round = await this.puzzleRounds.getById(session.puzzleRoundId);
@@ -38,25 +70,54 @@ export class AnswerUseCase implements CommandUseCase {
     }
 
     if (result.outcome === "correct") {
-      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, round.hiddenPositions.length);
-      return `正解です！\n答え: ${preview}\n結果: アウト（正解到達、${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;
+      // The image itself isn't the answer text, so image rounds also spell it out.
+      const answerLine = round.sourceType === "image" ? `正解: ${correctAnswerOf(round)}\n` : "";
+      return this.puzzlePreview.compose(round, round.hiddenPositions.length, "challenge", {
+        before: "正解です！",
+        label: "答え",
+        after: `${answerLine}結果: アウト（正解到達、${formatScore(result.score)}、記録済み）`,
+      });
     }
 
     if (result.outcome === "wrong_limit") {
-      return `誤答上限（${result.session.wrongAnswerLimit}回）に達しました。\n結果: アウト（${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;
+      return [
+        textMessage(
+          `誤答上限（${result.session.wrongAnswerLimit}回）に達しました。\n結果: アウト（${formatScore(result.score)}、記録済み）`,
+        ),
+      ];
     }
 
     if (result.outcome === "fully_revealed") {
-      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
-      return `不正解です。この位置での回答上限に達し、全開示となりました。\n最終状態: ${preview}\n結果: アウト（${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;
+      return this.puzzlePreview.compose(round, result.session.revealedCount, "challenge", {
+        before: "不正解です。この位置での回答上限に達し、全開示となりました。",
+        label: "最終状態",
+        after: `結果: アウト（${formatScore(result.score)}、記録済み）`,
+      });
     }
 
     if (result.outcome === "continue_revealed") {
-      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
-      return `不正解です。この位置での回答上限に達したため次を開示します。\n現在の状態: ${preview}\n誤答: ${result.session.wrongAnswerCount}/${result.session.wrongAnswerLimit}`;
+      const messages = await this.puzzlePreview.compose(
+        round,
+        result.session.revealedCount,
+        "challenge",
+        {
+          before: "不正解です。この位置での回答上限に達したため次を開示します。",
+          label: "現在の状態",
+          after: `誤答: ${result.session.wrongAnswerCount}/${result.session.wrongAnswerLimit}`,
+        },
+      );
+      return withButtonsOnLast(messages, answerButtons(session.id));
     }
 
-    const remainingAttempts = result.session.attemptsPerBlockLimit - result.session.currentStepAttempts;
-    return `不正解です。この位置であと${remainingAttempts}回回答できます。誤答: ${result.session.wrongAnswerCount}/${result.session.wrongAnswerLimit}`;
+    const remainingAttempts =
+      result.session.attemptsPerBlockLimit - result.session.currentStepAttempts;
+    return withButtonsOnLast(
+      [
+        textMessage(
+          `不正解です。この位置であと${remainingAttempts}回回答できます。誤答: ${result.session.wrongAnswerCount}/${result.session.wrongAnswerLimit}`,
+        ),
+      ],
+      answerButtons(session.id),
+    );
   }
 }
