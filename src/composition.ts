@@ -4,6 +4,9 @@ import { PlayerStatsRepository } from "./repositories/PlayerStatsRepository.js";
 import { FirestoreTransactor } from "./repositories/Transactor.js";
 import { AnswerFlowService } from "./services/AnswerFlowService.js";
 import { LineMessagingService } from "./services/LineMessagingService.js";
+import { ImageStorageService } from "./services/ImageStorageService.js";
+import { PuzzleImageService } from "./services/PuzzleImageService.js";
+import { PuzzlePreviewService } from "./services/PuzzlePreviewService.js";
 import { StartCreationUseCase } from "./useCases/commands/StartCreationUseCase.js";
 import { HideUseCase } from "./useCases/commands/HideUseCase.js";
 import { CreationStatusUseCase } from "./useCases/commands/CreationStatusUseCase.js";
@@ -12,6 +15,7 @@ import { AnswerUseCase } from "./useCases/commands/AnswerUseCase.js";
 import { SkipUseCase } from "./useCases/commands/SkipUseCase.js";
 import { ChallengeStatusUseCase } from "./useCases/commands/ChallengeStatusUseCase.js";
 import { ResultUseCase } from "./useCases/commands/ResultUseCase.js";
+import { ImageRoundSetupUseCase } from "./useCases/ImageRoundSetupUseCase.js";
 import { HandleLineEventUseCase } from "./useCases/HandleLineEventUseCase.js";
 
 export function buildHandleLineEventUseCase(): HandleLineEventUseCase {
@@ -21,18 +25,21 @@ export function buildHandleLineEventUseCase(): HandleLineEventUseCase {
   const transactor = new FirestoreTransactor();
   const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, transactor);
   const lineMessaging = new LineMessagingService();
+  const puzzleImages = new PuzzleImageService(new ImageStorageService());
+  const puzzlePreview = new PuzzlePreviewService(puzzleImages);
 
   return new HandleLineEventUseCase(
     {
       問題作成開始: new StartCreationUseCase(puzzleRounds),
-      隠す: new HideUseCase(puzzleRounds, transactor),
-      作成状況: new CreationStatusUseCase(puzzleRounds),
-      挑戦開始: new StartChallengeUseCase(puzzleRounds, answerSessions, answerFlow),
-      回答: new AnswerUseCase(puzzleRounds, answerSessions, answerFlow),
-      スキップ: new SkipUseCase(puzzleRounds, answerSessions, answerFlow),
-      挑戦状況: new ChallengeStatusUseCase(puzzleRounds, answerSessions),
+      隠す: new HideUseCase(puzzleRounds, transactor, puzzlePreview),
+      作成状況: new CreationStatusUseCase(puzzleRounds, puzzlePreview),
+      挑戦開始: new StartChallengeUseCase(puzzleRounds, answerSessions, answerFlow, puzzlePreview),
+      回答: new AnswerUseCase(puzzleRounds, answerSessions, answerFlow, puzzlePreview),
+      スキップ: new SkipUseCase(puzzleRounds, answerSessions, answerFlow, puzzlePreview),
+      挑戦状況: new ChallengeStatusUseCase(puzzleRounds, answerSessions, puzzlePreview),
       結果: new ResultUseCase(playerStats),
     },
+    new ImageRoundSetupUseCase(puzzleRounds, puzzleImages, puzzlePreview, lineMessaging),
     lineMessaging,
   );
 }

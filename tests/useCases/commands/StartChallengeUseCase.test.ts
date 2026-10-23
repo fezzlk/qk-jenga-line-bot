@@ -1,15 +1,17 @@
+import { textOf } from "../../../src/lineMessages.js";
 import { describe, expect, it } from "vitest";
 import { StartChallengeUseCase } from "../../../src/useCases/commands/StartChallengeUseCase.js";
 import { AnswerFlowService } from "../../../src/services/AnswerFlowService.js";
 import {
+  createFakePuzzlePreview,
   createFakeAnswerSessionRepository,
   createFakePlayerStatsRepository,
   createFakePuzzleRoundRepository,
   createFakeTransactor,
 } from "../../testUtils/fakeRepositories.js";
-import type { PuzzleRound } from "../../../src/types.js";
+import type { TextPuzzleRound } from "../../../src/types.js";
 
-function makeRound(overrides: Partial<PuzzleRound> = {}): PuzzleRound {
+function makeRound(overrides: Partial<TextPuzzleRound> = {}): TextPuzzleRound {
   return {
     id: "round-1",
     groupId: "g1",
@@ -30,12 +32,22 @@ describe("StartChallengeUseCase", () => {
     const puzzleRounds = createFakePuzzleRoundRepository([makeRound()]);
     const answerSessions = createFakeAnswerSessionRepository();
     const playerStats = createFakePlayerStatsRepository();
-    const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
-    const useCase = new StartChallengeUseCase(puzzleRounds, answerSessions, answerFlow);
+    const answerFlow = new AnswerFlowService(
+      answerSessions,
+      puzzleRounds,
+      playerStats,
+      createFakeTransactor(),
+    );
+    const useCase = new StartChallengeUseCase(
+      puzzleRounds,
+      answerSessions,
+      answerFlow,
+      createFakePuzzlePreview(),
+    );
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u3", args: "" });
 
-    expect(reply).toContain("挑戦を開始しました");
+    expect(textOf(reply)).toContain("挑戦を開始しました");
     const round = await puzzleRounds.getById("round-1");
     expect(round?.phase).toBe("in_challenge");
     const session = await answerSessions.getActiveByGroup("g1");
@@ -47,11 +59,21 @@ describe("StartChallengeUseCase", () => {
     const puzzleRounds = createFakePuzzleRoundRepository();
     const answerSessions = createFakeAnswerSessionRepository();
     const playerStats = createFakePlayerStatsRepository();
-    const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, createFakeTransactor());
-    const useCase = new StartChallengeUseCase(puzzleRounds, answerSessions, answerFlow);
+    const answerFlow = new AnswerFlowService(
+      answerSessions,
+      puzzleRounds,
+      playerStats,
+      createFakeTransactor(),
+    );
+    const useCase = new StartChallengeUseCase(
+      puzzleRounds,
+      answerSessions,
+      answerFlow,
+      createFakePuzzlePreview(),
+    );
 
     const reply = await useCase.execute({ groupId: "g1", userId: "u3", args: "" });
 
-    expect(reply).toContain("挑戦できるパズルラウンドがありません");
+    expect(textOf(reply)).toContain("挑戦できるパズルラウンドがありません");
   });
 });

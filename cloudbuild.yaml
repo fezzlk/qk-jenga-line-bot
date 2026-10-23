@@ -38,6 +38,8 @@ steps:
       # デプロイ前に、Secret Managerへ以下2つのシークレットを作成しておくこと（このリポジトリの
       # コードは作成しない。gcloud secrets create line-channel-secret / line-channel-access-token）。
       - "--update-secrets=LINE_CHANNEL_SECRET=line-channel-secret:latest,LINE_CHANNEL_ACCESS_TOKEN=line-channel-access-token:latest"
+      # 画像問題用の非公開バケット（作成手順はREADME「画像問題のインフラ準備」）
+      - "--update-env-vars=PUZZLE_IMAGES_BUCKET=qk-jenga-line-bot-puzzle-images"
 
 options:
   logging: CLOUD_LOGGING_ONLY

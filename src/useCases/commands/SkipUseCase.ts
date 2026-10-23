@@ -1,7 +1,9 @@
+import type { messagingApi } from "@line/bot-sdk";
 import { PuzzleRoundRepository } from "../../repositories/PuzzleRoundRepository.js";
 import { AnswerSessionRepository } from "../../repositories/AnswerSessionRepository.js";
 import { AnswerFlowService } from "../../services/AnswerFlowService.js";
-import { renderRevealedText } from "../../domain/services/textPuzzle.js";
+import { PuzzlePreviewService } from "../../services/PuzzlePreviewService.js";
+import { textMessage } from "../../lineMessages.js";
 import type { CommandInput, CommandUseCase } from "../commandTypes.js";
 
 export class SkipUseCase implements CommandUseCase {
@@ -9,12 +11,13 @@ export class SkipUseCase implements CommandUseCase {
     private readonly puzzleRounds: PuzzleRoundRepository,
     private readonly answerSessions: AnswerSessionRepository,
     private readonly answerFlow: AnswerFlowService,
+    private readonly puzzlePreview: PuzzlePreviewService,
   ) {}
 
-  async execute({ groupId, userId }: CommandInput): Promise<string> {
+  async execute({ groupId, userId }: CommandInput): Promise<messagingApi.Message[]> {
     const session = await this.answerSessions.getActiveByGroup(groupId);
     if (!session) {
-      return "進行中の挑戦がありません。「挑戦開始」で始めてください。";
+      return [textMessage("進行中の挑戦がありません。「挑戦開始」で始めてください。")];
     }
     const round = await this.puzzleRounds.getById(session.puzzleRoundId);
     if (!round) {
@@ -27,11 +30,16 @@ export class SkipUseCase implements CommandUseCase {
     const result = await this.answerFlow.submitSkip(session.id, round, userId);
 
     if (result.outcome === "fully_revealed") {
-      const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
-      return `スキップしました。全開示となりました。\n最終状態: ${preview}\n結果: アウト（${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`;
+      return this.puzzlePreview.compose(round, result.session.revealedCount, "challenge", {
+        before: "スキップしました。全開示となりました。",
+        label: "最終状態",
+        after: `結果: アウト（${result.score >= 0 ? "+" : ""}${result.score}点、記録済み）`,
+      });
     }
 
-    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, result.session.revealedCount);
-    return `スキップしました。\n現在の状態: ${preview}`;
+    return this.puzzlePreview.compose(round, result.session.revealedCount, "challenge", {
+      before: "スキップしました。",
+      label: "現在の状態",
+    });
   }
 }

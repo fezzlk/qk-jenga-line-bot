@@ -1,7 +1,9 @@
+import type { messagingApi } from "@line/bot-sdk";
 import { PuzzleRoundRepository } from "../../repositories/PuzzleRoundRepository.js";
 import { AnswerSessionRepository } from "../../repositories/AnswerSessionRepository.js";
 import { AnswerFlowService } from "../../services/AnswerFlowService.js";
-import { renderRevealedText } from "../../domain/services/textPuzzle.js";
+import { PuzzlePreviewService } from "../../services/PuzzlePreviewService.js";
+import { textMessage } from "../../lineMessages.js";
 import {
   DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT,
   DEFAULT_SCORE_CORRECT,
@@ -16,12 +18,15 @@ export class StartChallengeUseCase implements CommandUseCase {
     private readonly puzzleRounds: PuzzleRoundRepository,
     private readonly answerSessions: AnswerSessionRepository,
     private readonly answerFlow: AnswerFlowService,
+    private readonly puzzlePreview: PuzzlePreviewService,
   ) {}
 
-  async execute({ groupId, userId }: CommandInput): Promise<string> {
+  async execute({ groupId, userId }: CommandInput): Promise<messagingApi.Message[]> {
     const round = await this.puzzleRounds.getByGroupAndPhase(groupId, "ready_to_challenge");
     if (!round) {
-      return "挑戦できるパズルラウンドがありません。作成が完了しているか確認してください。";
+      return [
+        textMessage("挑戦できるパズルラウンドがありません。作成が完了しているか確認してください。"),
+      ];
     }
 
     const session = await this.answerSessions.create({
@@ -43,17 +48,22 @@ export class StartChallengeUseCase implements CommandUseCase {
     await this.puzzleRounds.update(round.id, { phase: "in_challenge" });
 
     const revealed = await this.answerFlow.revealNextBlock(session, round);
-    const preview = renderRevealedText(round.sourceText, round.hiddenPositions, revealed.session.revealedCount);
 
     if (revealed.session.status !== "active") {
       const score = revealed.score ?? 0;
-      return `挑戦を開始しましたが、1箇所しかない問題だったため即座に全開示となりました。\n最終状態: ${preview}\n結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`;
+      return this.puzzlePreview.compose(round, revealed.session.revealedCount, "challenge", {
+        before: "挑戦を開始しましたが、1箇所しかない問題だったため即座に全開示となりました。",
+        label: "最終状態",
+        after: `結果: アウト（${score >= 0 ? "+" : ""}${score}点、記録済み）`,
+      });
     }
 
-    return (
-      `挑戦を開始しました。\n現在の状態: ${preview}\n` +
-      "「回答 <内容>」または「スキップ」を送ってください。\n" +
-      `誤答上限: ${DEFAULT_WRONG_ANSWER_LIMIT}回 / 1箇所での回答上限: ${DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT}回`
-    );
+    return this.puzzlePreview.compose(round, revealed.session.revealedCount, "challenge", {
+      before: "挑戦を開始しました。",
+      label: "現在の状態",
+      after:
+        "「回答 <内容>」または「スキップ」を送ってください。\n" +
+        `誤答上限: ${DEFAULT_WRONG_ANSWER_LIMIT}回 / 1箇所での回答上限: ${DEFAULT_ATTEMPTS_PER_BLOCK_LIMIT}回`,
+    });
   }
 }

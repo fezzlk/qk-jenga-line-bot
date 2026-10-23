@@ -3,11 +3,8 @@ import { PuzzleRoundRepository } from "../repositories/PuzzleRoundRepository.js"
 import { PlayerStatsRepository } from "../repositories/PlayerStatsRepository.js";
 import type { Transactor } from "../repositories/Transactor.js";
 import { isFullyRevealed } from "../domain/services/textPuzzle.js";
-import {
-  type AnswerSession,
-  type AnswerSessionStatus,
-  type PuzzleRound,
-} from "../types.js";
+import { correctAnswerOf } from "../domain/services/imagePuzzle.js";
+import { type AnswerSession, type AnswerSessionStatus, type PuzzleRound } from "../types.js";
 
 /** Result of AnswerFlowService.submitAnswer, discriminated on how the attempt landed. */
 export type AnswerSubmitOutcome =
@@ -75,7 +72,9 @@ export class AnswerFlowService {
     status: Exclude<AnswerSessionStatus, "active">,
     extraPatch: Partial<AnswerSession> = {},
   ): Promise<{ session: AnswerSession; score: number }> {
-    return this.transactor.run(async (txn) => this.applyEndSession(txn, session, round, status, extraPatch));
+    return this.transactor.run(async (txn) =>
+      this.applyEndSession(txn, session, round, status, extraPatch),
+    );
   }
 
   /**
@@ -99,8 +98,10 @@ export class AnswerFlowService {
         ? session.answererIds
         : [...session.answererIds, userId];
 
-      if (answerText === round.sourceText) {
-        const { session: ended, score } = this.applyEndSession(txn, session, round, "correct", { answererIds });
+      if (answerText === correctAnswerOf(round)) {
+        const { session: ended, score } = this.applyEndSession(txn, session, round, "correct", {
+          answererIds,
+        });
         return { outcome: "correct", session: ended, score };
       }
 
@@ -117,12 +118,18 @@ export class AnswerFlowService {
       if (currentStepAttempts >= session.attemptsPerBlockLimit) {
         const revealedCount = session.revealedCount + 1;
         if (isFullyRevealed(round.hiddenPositions, revealedCount)) {
-          const { session: ended, score } = this.applyEndSession(txn, session, round, "fully_revealed", {
-            wrongAnswerCount,
-            answererIds,
-            revealedCount,
-            currentStepAttempts: 0,
-          });
+          const { session: ended, score } = this.applyEndSession(
+            txn,
+            session,
+            round,
+            "fully_revealed",
+            {
+              wrongAnswerCount,
+              answererIds,
+              revealedCount,
+              currentStepAttempts: 0,
+            },
+          );
           return { outcome: "fully_revealed", session: ended, score };
         }
         const patch = { wrongAnswerCount, answererIds, revealedCount, currentStepAttempts: 0 };
@@ -140,7 +147,11 @@ export class AnswerFlowService {
    * Transaction-safe write-path for SkipUseCase: same re-read pattern as submitAnswer,
    * for fully_revealed / continue.
    */
-  async submitSkip(sessionId: string, round: PuzzleRound, userId: string): Promise<SkipSubmitOutcome> {
+  async submitSkip(
+    sessionId: string,
+    round: PuzzleRound,
+    userId: string,
+  ): Promise<SkipSubmitOutcome> {
     return this.transactor.run(async (txn) => {
       const session = await this.answerSessions.getByIdInTransaction(txn, sessionId);
       if (!session) {
@@ -152,11 +163,17 @@ export class AnswerFlowService {
 
       const revealedCount = session.revealedCount + 1;
       if (isFullyRevealed(round.hiddenPositions, revealedCount)) {
-        const { session: ended, score } = this.applyEndSession(txn, session, round, "fully_revealed", {
-          answererIds,
-          revealedCount,
-          currentStepAttempts: 0,
-        });
+        const { session: ended, score } = this.applyEndSession(
+          txn,
+          session,
+          round,
+          "fully_revealed",
+          {
+            answererIds,
+            revealedCount,
+            currentStepAttempts: 0,
+          },
+        );
         return { outcome: "fully_revealed", session: ended, score };
       }
       const patch = { answererIds, revealedCount, currentStepAttempts: 0 };
