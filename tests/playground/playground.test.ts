@@ -137,7 +137,8 @@ describe("PlaygroundService", () => {
     const push = t.line.pushes.at(-1)!;
     expect(push.to).toBe(GROUP);
     expect(push.messages[0]).toEqual({ type: "text", text: "🧪Bさん: 参加する" });
-    expect(push.messages.slice(1).every((m) => m.quickReply === undefined)).toBe(true);
+    // The group copy keeps the buttons so the real user can still tap 締め切る in the app.
+    expect(push.messages.at(-1)?.quickReply).toEqual(joined.replies.at(-1)?.quickReply);
 
     await t.service.send(GROUP, carol.userId, t.postbackOf(recruiting, "参加する"));
     const closed = await t.aliceTaps(recruiting, "締め切る");
