@@ -9,9 +9,13 @@ export class LineMessagingService {
   private blobClient: InstanceType<typeof MessagingApiBlobClient>;
 
   constructor() {
-    this.client = new MessagingApiClient({ channelAccessToken: env.lineChannelAccessToken });
+    this.client = new MessagingApiClient({
+      channelAccessToken: env.lineChannelAccessToken,
+      ...(env.lineApiBaseUrl ? { baseURL: env.lineApiBaseUrl } : {}),
+    });
     this.blobClient = new MessagingApiBlobClient({
       channelAccessToken: env.lineChannelAccessToken,
+      ...(env.lineApiDataBaseUrl ? { baseURL: env.lineApiDataBaseUrl } : {}),
     });
   }
 
