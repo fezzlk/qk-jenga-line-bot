@@ -7,7 +7,6 @@ import {
   type WebhookRequestBody,
 } from "@line/bot-sdk";
 import { env } from "../config/env.js";
-import { buildHandleLineEventUseCase } from "../composition.js";
 
 type LineEventHandler = { handle(event: WebhookEvent): Promise<void> };
 
@@ -46,15 +45,19 @@ const handleWebhookError: ErrorRequestHandler = (err, _req, res, next) => {
   next(err);
 };
 
-export function createWebhookRouter(): Router {
+export function createWebhookRouter(
+  handleLineEvent: LineEventHandler,
+  // Sees every verified batch before it's handled (the playground plugin records groups here).
+  onEvents?: (events: WebhookEvent[]) => Promise<void>,
+): Router {
   const router = Router();
-  const handleLineEvent = buildHandleLineEventUseCase();
 
   router.post(
     "/callback",
     middleware({ channelSecret: env.lineChannelSecret }),
     async (req, res) => {
       const body = req.body as WebhookRequestBody;
+      await onEvents?.(body.events);
       await handleEventsSafely(body.events, handleLineEvent);
       res.status(200).end();
     },
