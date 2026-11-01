@@ -18,14 +18,20 @@ import { ResultUseCase } from "./useCases/commands/ResultUseCase.js";
 import { RoundSetupUseCase } from "./useCases/RoundSetupUseCase.js";
 import { RecruitUseCase } from "./useCases/RecruitUseCase.js";
 import { HandleLineEventUseCase } from "./useCases/HandleLineEventUseCase.js";
+import { env } from "./config/env.js";
+import { PlaygroundLineMessaging, type LineGateway } from "./playground/PlaygroundLineMessaging.js";
+import { PlaygroundService } from "./playground/PlaygroundService.js";
+import { createPlaygroundRouter } from "./playground/router.js";
+import { FirestorePlaygroundStore } from "./playground/store.js";
 
-export function buildHandleLineEventUseCase(): HandleLineEventUseCase {
+export function buildHandleLineEventUseCase(
+  lineMessaging: LineGateway = new LineMessagingService(),
+): HandleLineEventUseCase {
   const puzzleRounds = new PuzzleRoundRepository();
   const answerSessions = new AnswerSessionRepository();
   const playerStats = new PlayerStatsRepository();
   const transactor = new FirestoreTransactor();
   const answerFlow = new AnswerFlowService(answerSessions, puzzleRounds, playerStats, transactor);
-  const lineMessaging = new LineMessagingService();
   const puzzleImages = new PuzzleImageService(new ImageStorageService());
   const puzzlePreview = new PuzzlePreviewService(puzzleImages);
 
@@ -46,4 +52,27 @@ export function buildHandleLineEventUseCase(): HandleLineEventUseCase {
     answerSessions,
     lineMessaging,
   });
+}
+
+/**
+ * The bot's event handler, plus the playground plugin when it's enabled
+ * (PLAYGROUND_ENABLED=true and PLAYGROUND_TOKEN set). When disabled, nothing
+ * about the bot's LINE calls changes and no playground route exists.
+ */
+export function buildBot() {
+  const line = new LineMessagingService();
+  const config = env.playground;
+  if (!config) return { handler: buildHandleLineEventUseCase(line), playground: null };
+
+  const store = new FirestorePlaygroundStore();
+  const playgroundLine = new PlaygroundLineMessaging(line, store);
+  const handler = buildHandleLineEventUseCase(playgroundLine);
+  const service = new PlaygroundService(store, playgroundLine, handler, config.allowedGroups);
+  const router = createPlaygroundRouter({
+    token: config.token,
+    botName: "qk-jenga-line-bot",
+    store,
+    service,
+  });
+  return { handler, playground: { service, router } };
 }

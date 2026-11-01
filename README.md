@@ -55,3 +55,34 @@ gcloud iam service-accounts add-iam-policy-binding ${SA} --project=${PROJECT} \
 ```
 
 バケット名は `cloudbuild.yaml` の `PUZZLE_IMAGES_BUCKET` で渡します。文章問題だけを使う場合、この環境変数は不要です（画像問題を扱う時にだけ参照します）。
+
+## 複数人テスト用の代理送信プラグイン（開発者向け）
+
+LINE アカウントが 1 つでも複数人の流れを実際の LINE アプリで確かめられるように、架空のユーザーとして bot に操作を送るプラグイン（`src/playground/`）を組み込んでいます。操作は [line-bot-playground](https://github.com/fezzlk/line-bot-playground) のコントローラーから行います。
+
+- 架空のユーザーの操作は、bot の普段の処理にそのまま渡ります。その人への返信は、「🧪Bさん: 参加する」という代理表示と一緒に、グループへ push されます（push 1 回につき、グループの人数分のメッセージ数を消費します）
+- 送れるのは `PLAYGROUND_ALLOWED_GROUPS` に入れたグループだけです。本物の参加者がいるグループは入れないでください
+- `PLAYGROUND_ENABLED=true` と `PLAYGROUND_TOKEN` の両方がないときは無効です。`/playground` のエンドポイントもなくなり、LINE 送信の動きも変わりません
+
+本番で有効にするときは、トークンを Secret Manager に置き、Cloud Run の設定を直接更新します。`cloudbuild.yaml` は `--update-*` で必要な値だけを上書きするので、ここで設定した値は以後のデプロイでも残ります。
+
+```bash
+PROJECT=qk-jenga-line-bot
+SA=qk-jenga-line-bot-run@${PROJECT}.iam.gserviceaccount.com
+
+# トークンを作って Secret Manager に置き、実行 SA に読み取り権限を付ける（初回だけ）
+openssl rand -hex 32 | gcloud secrets create playground-token --project=${PROJECT} --data-file=-
+gcloud secrets add-iam-policy-binding playground-token --project=${PROJECT} \
+  --member=serviceAccount:${SA} --role=roles/secretmanager.secretAccessor
+
+# 有効にする（グループ ID はテスト用グループのもの。カンマ区切りで複数可）
+gcloud run services update qk-jenga-line-bot --project=${PROJECT} --region=asia-northeast1 \
+  --update-secrets=PLAYGROUND_TOKEN=playground-token:latest \
+  --update-env-vars=PLAYGROUND_ENABLED=true,PLAYGROUND_ALLOWED_GROUPS=Cxxxxxxxx
+
+# 無効にする
+gcloud run services update qk-jenga-line-bot --project=${PROJECT} --region=asia-northeast1 \
+  --update-env-vars=PLAYGROUND_ENABLED=false
+```
+
+グループ ID は、プラグインを有効にした状態でグループに何か送ると、コントローラーのグループ一覧に出ます。このとき、まだ許可されていないグループも一覧には出るので、そこで ID を確かめて `PLAYGROUND_ALLOWED_GROUPS` に入れます。架空ユーザーの ID はすべて `Uplayground` で始まるので、Firestore に残ったテストのデータ（成績など）はこれで見分けられます。

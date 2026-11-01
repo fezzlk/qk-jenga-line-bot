@@ -20,6 +20,22 @@ export class LineMessagingService {
     await this.client.replyMessage({ replyToken, messages });
   }
 
+  async push(to: string, messages: messagingApi.Message[]): Promise<void> {
+    if (messages.length === 0) return;
+    await this.client.pushMessage({ to, messages });
+  }
+
+  /** The group's name, or null for rooms/1:1 chats or when it can't be fetched. */
+  async getGroupName(groupId: string): Promise<string | null> {
+    if (!groupId.startsWith("C")) return null;
+    try {
+      return (await this.client.getGroupSummary(groupId)).groupName;
+    } catch (error) {
+      console.warn("Failed to fetch LINE group summary", error);
+      return null;
+    }
+  }
+
   /** Downloads the binary content (e.g. an image) a user sent, by its LINE message ID. */
   async getMessageContent(messageId: string): Promise<Buffer> {
     const stream = await this.blobClient.getMessageContent(messageId);
