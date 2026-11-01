@@ -110,6 +110,14 @@ export function createPlaygroundRouter(opts: {
     }),
   );
 
+  router.get(
+    "/groups/:groupId/messages",
+    asyncRoute(async (req, res) => {
+      const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100);
+      res.json({ messages: await service.listLog(req.params.groupId!, limit) });
+    }),
+  );
+
   router.post(
     "/send",
     asyncRoute(async (req, res) => {

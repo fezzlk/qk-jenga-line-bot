@@ -164,6 +164,36 @@ describe("PlaygroundService", () => {
     expect(t.line.replies.every((r) => r.token === "real-reply-token")).toBe(true);
   });
 
+  it("logs the real user's actions and the bot's replies to them, buttons included", async () => {
+    const t = await setup();
+    const bob = await t.store.addUser(GROUP, "Bさん");
+    const formats = await t.aliceSays("問題作成開始");
+    await t.aliceTaps(formats, "文章で作る");
+    await t.aliceSays("ab");
+
+    // The controller only sees the log: find the 参加する button the bot showed alice.
+    const log = await t.service.listLog(GROUP, 30);
+    expect(log.map((e) => e.kind)).toEqual(["real", "bot", "real", "bot", "real", "bot"]);
+    const lastBot = log.at(-1);
+    if (lastBot?.kind !== "bot") throw new Error("expected a bot entry");
+    const joined = await t.service.send(
+      GROUP,
+      bob.userId,
+      t.postbackOf(lastBot.messages, "参加する"),
+    );
+    expect(textOf(joined.replies)).toContain("Bさん");
+
+    const after = await t.service.listLog(GROUP, 2);
+    expect(after[0]).toMatchObject({
+      kind: "fictional",
+      userId: bob.userId,
+      name: "Bさん",
+      text: "参加する",
+    });
+    expect(after[1]).toMatchObject({ kind: "bot", replyTo: bob.userId });
+    await expect(t.service.listLog("Cother", 10)).rejects.toMatchObject({ status: 403 });
+  });
+
   it("refuses groups that aren't allowed and users from another group", async () => {
     const t = await setup();
     const other = await t.store.addUser("Cother", "Dさん");

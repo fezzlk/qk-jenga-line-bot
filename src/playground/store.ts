@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { messagingApi } from "@line/bot-sdk";
 import { FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../config/firebase.js";
 
@@ -11,6 +12,16 @@ export type PlaygroundGroup = {
 };
 
 export type PlaygroundUser = { userId: string; groupId: string; name: string };
+
+/**
+ * One line of an allowed group's conversation as the controller shows it: what a
+ * real or fictional user did, or what the bot sent (with its buttons intact, so
+ * fictional users can tap buttons that were shown to the real user).
+ */
+export type PlaygroundLogEntry =
+  | { at: number; kind: "real"; userId: string; text: string }
+  | { at: number; kind: "fictional"; userId: string; name: string; text: string }
+  | { at: number; kind: "bot"; replyTo: string; messages: messagingApi.Message[] };
 
 /** Fictional users' IDs are LINE-shaped ("U" + 32 chars) and always contain "playground". */
 export const PLAYGROUND_USER_PREFIX = "Uplayground";
@@ -32,10 +43,14 @@ export interface PlaygroundStore {
   addUser(groupId: string, name: string): Promise<PlaygroundUser>;
   renameUser(userId: string, name: string): Promise<PlaygroundUser | null>;
   getUser(userId: string): Promise<PlaygroundUser | null>;
+  appendLog(groupId: string, entry: PlaygroundLogEntry): Promise<void>;
+  /** The latest `limit` entries, oldest first. */
+  listLog(groupId: string, limit: number): Promise<PlaygroundLogEntry[]>;
 }
 
 const GROUPS = "playgroundGroups";
 const USERS = "playgroundUsers";
+const LOG = "log";
 
 // Persisted because Cloud Run instances come and go; an in-memory registry would
 // forget fictional users between requests.
@@ -98,6 +113,26 @@ export class FirestorePlaygroundStore implements PlaygroundStore {
     const doc = await getDb().collection(USERS).doc(userId).get();
     return doc.exists ? (doc.data() as PlaygroundUser) : null;
   }
+
+  async appendLog(groupId: string, entry: PlaygroundLogEntry) {
+    // Message objects are plain JSON; round-tripping drops undefined fields Firestore rejects.
+    await getDb()
+      .collection(GROUPS)
+      .doc(groupId)
+      .collection(LOG)
+      .add(JSON.parse(JSON.stringify(entry)));
+  }
+
+  async listLog(groupId: string, limit: number) {
+    const snapshot = await getDb()
+      .collection(GROUPS)
+      .doc(groupId)
+      .collection(LOG)
+      .orderBy("at", "desc")
+      .limit(limit)
+      .get();
+    return snapshot.docs.map((doc) => doc.data() as PlaygroundLogEntry).reverse();
+  }
 }
 
 export class InMemoryPlaygroundStore implements PlaygroundStore {
@@ -144,5 +179,15 @@ export class InMemoryPlaygroundStore implements PlaygroundStore {
 
   async getUser(userId: string) {
     return this.users.get(userId) ?? null;
+  }
+
+  logs = new Map<string, PlaygroundLogEntry[]>();
+
+  async appendLog(groupId: string, entry: PlaygroundLogEntry) {
+    this.logs.set(groupId, [...(this.logs.get(groupId) ?? []), entry]);
+  }
+
+  async listLog(groupId: string, limit: number) {
+    return (this.logs.get(groupId) ?? []).slice(-limit);
   }
 }

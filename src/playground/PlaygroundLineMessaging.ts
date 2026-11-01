@@ -21,6 +21,8 @@ export const PLAYGROUND_REPLY_TOKEN_PREFIX = "playground:";
 export class PlaygroundLineMessaging implements LineGateway {
   private captures = new Map<string, messagingApi.Message[]>();
   private images = new Map<string, Buffer>();
+  /** Real reply tokens from allowed groups, so replies to the real user get logged too. */
+  private loggedReplies = new Map<string, { groupId: string; userId: string }>();
 
   constructor(
     private readonly inner: LineGateway,
@@ -45,9 +47,31 @@ export class PlaygroundLineMessaging implements LineGateway {
     };
   }
 
+  /** Logs the bot's reply to this real event (allowed groups only) for the controller to show. */
+  logRepliesTo(replyToken: string, groupId: string, userId: string): void {
+    this.loggedReplies.set(replyToken, { groupId, userId });
+    // Events the bot ignores never reply; forget the oldest so the map can't grow forever.
+    if (this.loggedReplies.size > 500) {
+      this.loggedReplies.delete(this.loggedReplies.keys().next().value!);
+    }
+  }
+
   async reply(replyToken: string, messages: messagingApi.Message[]): Promise<void> {
     if (!replyToken.startsWith(PLAYGROUND_REPLY_TOKEN_PREFIX)) {
-      return this.inner.reply(replyToken, messages);
+      await this.inner.reply(replyToken, messages);
+      const target = this.loggedReplies.get(replyToken);
+      if (target) {
+        this.loggedReplies.delete(replyToken);
+        await this.store
+          .appendLog(target.groupId, {
+            at: Date.now(),
+            kind: "bot",
+            replyTo: target.userId,
+            messages,
+          })
+          .catch((error) => console.warn("Failed to log playground reply", error));
+      }
+      return;
     }
     const captured = this.captures.get(replyToken);
     if (captured) captured.push(...messages);
