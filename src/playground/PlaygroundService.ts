@@ -64,13 +64,6 @@ function realEventText(event: WebhookEvent): string | null {
   return `［${event.message.type}］`;
 }
 
-/** Quick replies are dropped from the group copy: tapping them there would act as the real user. */
-function withoutQuickReply(message: messagingApi.Message): messagingApi.Message {
-  const copy = { ...message };
-  delete copy.quickReply;
-  return copy;
-}
-
 export class PlaygroundService {
   private recorded = new Set<string>();
 
@@ -235,7 +228,9 @@ export class PlaygroundService {
 
     const toPush: messagingApi.Message[] = [
       { type: "text", text: echo },
-      ...replies.map(withoutQuickReply),
+      // Quick replies stay: they're the group's buttons (e.g. 締め切る), and LINE only shows
+      // them on the latest message, which after this push is the bot's reply.
+      ...replies,
     ];
     for (let i = 0; i < toPush.length; i += MAX_MESSAGES_PER_PUSH) {
       await this.line.push(groupId, toPush.slice(i, i + MAX_MESSAGES_PER_PUSH));
