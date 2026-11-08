@@ -55,4 +55,4 @@ Cloud Run のログは cloud-run-logging MCP を使って確認できる。
 
 ## 出力ファイル
 
-調査報告・スクリプトなどは `~/ai-output/qk-jenga-line-bot/` に保存すること。
+調査報告・スクリプトなどはリポジトリ直下の `output/`（`~/repos/qk-jenga-line-bot/output/`。グローバル gitignore で除外済みのためコミットされない）に保存すること。
